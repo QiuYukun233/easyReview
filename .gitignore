@@ -4,3 +4,5 @@ dist/
 .DS_Store
 easyreview.tree.json
 easyreview.map.md
+easyreview.journey.md
+easyreview.progress.json
