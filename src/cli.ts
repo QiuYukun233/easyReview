@@ -47,3 +47,22 @@ if (cmd === 'map') {
     .then(() => console.log('✓ wrote easyreview.tree.json + easyreview.map.md'))
     .catch((e) => { console.error(e); process.exit(1); });
 }
+
+if (cmd === 'learn') {
+  import('./cli-learn.js').then(({ runLearn }) =>
+    runLearn({ outDir: parseArgs(process.argv.slice(3)).outDir })
+      .then(() => console.log('✓ wrote easyreview.journey.md + progress + lit map'))
+      .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
+  );
+}
+
+if (cmd === 'done') {
+  const rest = process.argv.slice(3);
+  const chunkId = rest.find((a) => !a.startsWith('--'));
+  if (!chunkId) { console.error('用法: easyreview done <chunkId> [--out <dir>]'); process.exit(1); }
+  import('./cli-learn.js').then(({ runDone }) =>
+    runDone({ outDir: parseArgs(rest).outDir, chunkId })
+      .then(() => console.log(`✓ marked ${chunkId} understood`))
+      .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
+  );
+}

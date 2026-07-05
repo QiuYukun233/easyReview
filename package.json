@@ -7,7 +7,9 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "map": "tsx src/cli.ts map"
+    "map": "tsx src/cli.ts map",
+    "learn": "tsx src/cli.ts learn",
+    "done": "tsx src/cli.ts done"
   },
   "dependencies": {
     "web-tree-sitter": "^0.22.6",
