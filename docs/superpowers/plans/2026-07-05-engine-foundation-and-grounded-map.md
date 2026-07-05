@@ -977,10 +977,14 @@ function chunkLoc(chunkId: string, leaves: Leaf[]): number {
   return leaves.filter((l) => l.file === chunkId).reduce((s, l) => s + l.loc, 0);
 }
 
-/** 按分位分桶：把 value 在 sorted 值集合里的分位映射到 4 桶。 */
+/**
+ * 按分位分桶：把 value 在 sorted 值集合里的位置百分位映射到 4 桶。
+ * 用 (rank-1)/(n-1) 使 min→0、max→1，保证最小值进 labels[0]、最大值进 labels[3]，
+ * 不受样本大小影响（朴素的 rank/n 在 n<4 时最小值分位>0.25，会漏掉第 0 桶）。
+ */
 function quantileBucket<T>(value: number, sorted: number[], labels: [T, T, T, T]): T {
-  if (sorted.length === 0) return labels[0];
-  const rank = sorted.filter((v) => v <= value).length / sorted.length;
+  if (sorted.length <= 1) return labels[0];
+  const rank = (sorted.filter((v) => v <= value).length - 1) / (sorted.length - 1);
   if (rank <= 0.25) return labels[0];
   if (rank <= 0.5) return labels[1];
   if (rank <= 0.75) return labels[2];
