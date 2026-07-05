@@ -72,4 +72,34 @@ export interface JourneyPath {
 export interface Progress {
   version: 1;
   understood: NodeId[];   // 已标记理解的 chunk id
+  verified?: NodeId[];   // 通过突变探针验证的块（Plan ③）
+}
+
+export interface TestResult { name: string; passed: boolean; }
+export interface CargoTestRun { compiled: boolean; results: TestResult[]; }
+
+export interface MutationOp {
+  file: string;       // 相对 repo 根
+  line: number;       // 1-based
+  original: string;   // 原行（含缩进）
+  mutated: string;    // 替换行
+  description: string;
+}
+
+export interface BlastRadius {
+  chunkId: NodeId;
+  mutation: MutationOp;
+  newlyFailing: string[]; // 突变后由绿转红的测试名
+  compileBroke: boolean;  // 突变导致编译失败（load-bearing）
+  note: string;
+}
+
+export interface Verdict {
+  chunkId: NodeId;
+  predicted: string[];
+  actual: string[];
+  hits: string[];
+  misses: string[];
+  falseAlarms: string[];
+  passed: boolean;
 }
