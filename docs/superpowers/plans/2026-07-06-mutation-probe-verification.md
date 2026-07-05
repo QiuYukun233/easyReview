@@ -818,9 +818,12 @@ export async function runVerifyPredict(o: PredictOpts): Promise<void> {
     baselineGreen: cached.green,
     runAfter: () => runCargoTests(o.repo, CRATE, o.exec),
   });
+  // 空爆炸半径（非编译崩）= 该块没被测试覆盖 → 无法用突变探针验证，不能算通过（否则预测空即 vacuous pass）
+  const uncovered = !blast.compileBroke && blast.newlyFailing.length === 0;
   const verdict = judge(blast, o.predicted);
+  const passed = verdict.passed && !uncovered;
 
-  if (verdict.passed) {
+  if (passed) {
     const file = progressPath(o.outDir);
     let p = loadProgress(file);
     p = markUnderstood(p, chunk.id);
@@ -828,21 +831,30 @@ export async function runVerifyPredict(o: PredictOpts): Promise<void> {
     saveProgress(file, p);
   }
 
-  const lines = [
-    '# 突变探针 · 判定',
-    '',
-    `目标块：\`${chunk.name}\`  (\`${chunk.file}\`)`,
-    blast.compileBroke ? '突变让 crate **无法编译**——这行是承重的。' : '',
-    '',
-    `- 你的预测：${o.predicted.map((t) => `\`${t}\``).join(', ') || '（无）'}`,
-    `- 真实爆炸半径：${blast.actual.map((t) => `\`${t}\``).join(', ') || '（无——可能未被测试覆盖）'}`,
-    `- 命中：${verdict.hits.join(', ') || '—'}`,
-    `- 漏掉（真崩没预测到）：${verdict.misses.join(', ') || '—'}`,
-    `- 误报（预测崩了没崩）：${verdict.falseAlarms.join(', ') || '—'}`,
-    '',
-    verdict.passed ? '✅ **通过**——已标记该块为 verified。' : '❌ 未通过——回去重读，尤其漏掉的那几个测试对应的行为。',
-    blast.note ? `\n> ${blast.note}` : '',
-  ];
+  const lines = uncovered
+    ? [
+        '# 突变探针 · 无法验证',
+        '',
+        `目标块：\`${chunk.name}\`  (\`${chunk.file}\`)`,
+        `⚠️ 注释掉突变位点后没有任何测试变红——**这块没被测试覆盖**，突变探针无法验证它。`,
+        '换一个被测试覆盖的块试（如 field/scene/phase 的核心函数），或先给它补个测试。',
+        blast.note ? `\n> ${blast.note}` : '',
+      ]
+    : [
+        '# 突变探针 · 判定',
+        '',
+        `目标块：\`${chunk.name}\`  (\`${chunk.file}\`)`,
+        blast.compileBroke ? '突变让 crate **无法编译**——这行是承重的。' : '',
+        '',
+        `- 你的预测：${o.predicted.map((t) => `\`${t}\``).join(', ') || '（无）'}`,
+        `- 真实爆炸半径：${verdict.actual.map((t) => `\`${t}\``).join(', ') || '（无）'}`,
+        `- 命中：${verdict.hits.join(', ') || '—'}`,
+        `- 漏掉（真崩没预测到）：${verdict.misses.join(', ') || '—'}`,
+        `- 误报（预测崩了没崩）：${verdict.falseAlarms.join(', ') || '—'}`,
+        '',
+        passed ? '✅ **通过**——已标记该块为 verified。' : '❌ 未通过——回去重读，尤其漏掉的那几个测试对应的行为。',
+        blast.note ? `\n> ${blast.note}` : '',
+      ];
   writeFileSync(verifyMd(o.outDir), lines.filter((l) => l !== '').join('\n'));
 }
 ```
