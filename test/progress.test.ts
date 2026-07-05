@@ -31,4 +31,21 @@ describe('progress', () => {
     expect(percentComplete(4, { version: 1, understood: ['a', 'b'] })).toBe(50);
     expect(percentComplete(3, { version: 1, understood: ['a'] })).toBe(33);
   });
+
+  it('preserves verified across load/mark/save (multi-chunk)', () => {
+    const d = mkdtempSync(join(tmpdir(), 'ezp-')); dirs.push(d);
+    const file = join(d, 'easyreview.progress.json');
+    // simulate: chunk A already understood+verified
+    saveProgress(file, { version: 1, understood: ['a.rs'], verified: ['a.rs'] });
+    // now mark chunk B understood, then add B to verified (mirrors cli-verify flow)
+    let p = loadProgress(file);
+    expect(p.verified).toEqual(['a.rs']);          // verified survived the load
+    p = markUnderstood(p, 'b.rs');
+    expect(p.verified).toEqual(['a.rs']);          // mark didn't drop verified
+    p = { ...p, verified: [...(p.verified ?? []), 'b.rs'] };
+    saveProgress(file, p);
+    const loaded = loadProgress(file);
+    expect(loaded.understood).toEqual(['a.rs', 'b.rs']);
+    expect(loaded.verified).toEqual(['a.rs', 'b.rs']); // A NOT dropped when B verified
+  });
 });
