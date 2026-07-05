@@ -174,9 +174,12 @@ export function buildPath(g: GradedTree): JourneyPath {
   }
 
   const ordered = [...g.chunks].sort((a, b) => {
-    const ca = chapterMin[chunkChapter[a.id]] ?? 1;
-    const cb = chapterMin[chunkChapter[b.id]] ?? 1;
+    const chA = chunkChapter[a.id];
+    const chB = chunkChapter[b.id];
+    const ca = chapterMin[chA] ?? 1;
+    const cb = chapterMin[chB] ?? 1;
     if (ca !== cb) return ca - cb;
+    if (chA !== chB) return chA < chB ? -1 : 1; // chapterMin 打平时按 chapterId 保证章内连续
     return diff[a.id] - diff[b.id];
   });
 
@@ -541,7 +544,10 @@ export function renderMapMarkdown(g: GradedTree, understood?: Set<NodeId>): stri
   const lines: string[] = [];
   lines.push('# easyReview 地图');
   lines.push('');
-  lines.push('> 接地地图：章按 git 历史算出的风险 × 架构贡献度落位。从左下（填充/低风险）起步，爬向右上核心。✓ = 已走完。');
+  lines.push(
+    '> 接地地图：章按 git 历史算出的风险 × 架构贡献度落位。从左下（填充/低风险）起步，爬向右上核心。' +
+      (understood ? '✓ = 已走完。' : ''),
+  );
   lines.push('');
   lines.push(`| | ${CONTRIB_COLS.map((c) => CONTRIB_LABEL[c]).join(' | ')} |`);
   lines.push(`|---|${CONTRIB_COLS.map(() => '---').join('|')}|`);
@@ -594,6 +600,8 @@ describe('learn / done', () => {
     const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
     writeRepoFile(dir, 'crates/foo/src/lib.rs', 'pub fn a() { b(); }\nfn b() {}');
     writeRepoFile(dir, 'crates/foo/src/util.rs', 'pub fn util() {}');
+    writeRepoFile(dir, 'crates/foo/src/extra.rs', 'pub fn extra() {}');
+    // 需 ≥3 chunk：否则 done 后进度=50%/100%，而 '50%'.includes('0%') 为真，断言 not.toContain('0%') 假失败
     commitAll(dir, 'init');
 
     await runMap({ repo: dir, outDir: dir });         // 产出 tree.json
