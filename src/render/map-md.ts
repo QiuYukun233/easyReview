@@ -1,4 +1,4 @@
-import type { GradedTree, Chapter, RiskBucket, ContribBucket } from '../types.js';
+import type { GradedTree, Chapter, RiskBucket, ContribBucket, NodeId } from '../types.js';
 
 const RISK_ROWS: RiskBucket[] = ['high', 'med', 'low', 'none'];
 const CONTRIB_COLS: ContribBucket[] = ['filler', 'low', 'med', 'high'];
@@ -17,19 +17,27 @@ function chapterBuckets(ch: Chapter, g: GradedTree): { risk: RiskBucket; contrib
   return { risk: mode(rs), contrib: mode(cs) };
 }
 
-export function renderMapMarkdown(g: GradedTree): string {
+function isLit(ch: Chapter, understood: Set<NodeId>): boolean {
+  return ch.chunkIds.length > 0 && ch.chunkIds.every((id) => understood.has(id));
+}
+
+export function renderMapMarkdown(g: GradedTree, understood?: Set<NodeId>): string {
   const grid = new Map<string, string[]>();
   for (const ch of g.chapters) {
     const { risk, contrib } = chapterBuckets(ch, g);
     const key = `${risk}|${contrib}`;
+    const label = understood && isLit(ch, understood) ? `✓ ${ch.name}` : ch.name;
     if (!grid.has(key)) grid.set(key, []);
-    grid.get(key)!.push(ch.name);
+    grid.get(key)!.push(label);
   }
 
   const lines: string[] = [];
   lines.push('# easyReview 地图');
   lines.push('');
-  lines.push('> 接地地图：章按 git 历史算出的风险 × 架构贡献度落位。从左下（填充/低风险）起步，爬向右上核心。');
+  lines.push(
+    '> 接地地图：章按 git 历史算出的风险 × 架构贡献度落位。从左下（填充/低风险）起步，爬向右上核心。' +
+      (understood ? '✓ = 已走完。' : '')
+  );
   lines.push('');
   lines.push(`| | ${CONTRIB_COLS.map((c) => CONTRIB_LABEL[c]).join(' | ')} |`);
   lines.push(`|---|${CONTRIB_COLS.map(() => '---').join('|')}|`);
