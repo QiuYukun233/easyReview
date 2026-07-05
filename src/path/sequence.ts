@@ -21,9 +21,12 @@ export function buildPath(g: GradedTree): JourneyPath {
   }
 
   const ordered = [...g.chunks].sort((a, b) => {
-    const ca = chapterMin[chunkChapter[a.id]] ?? 1;
-    const cb = chapterMin[chunkChapter[b.id]] ?? 1;
+    const chA = chunkChapter[a.id];
+    const chB = chunkChapter[b.id];
+    const ca = chapterMin[chA] ?? 1;
+    const cb = chapterMin[chB] ?? 1;
     if (ca !== cb) return ca - cb;
+    if (chA !== chB) return chA < chB ? -1 : 1; // chapterMin 打平时按 chapterId 保证章内连续
     return diff[a.id] - diff[b.id];
   });
 
