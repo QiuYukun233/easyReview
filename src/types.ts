@@ -55,3 +55,21 @@ export interface Grade {
 export interface GradedTree extends Tree {
   grades: Record<NodeId, Grade>;
 }
+
+export interface LearningStep {
+  chunkId: NodeId;
+  order: number;          // 0-based 路径位置
+  chapterId: NodeId;
+  difficulty: number;     // 0..1 复合（越低越早学）
+  neighbors: NodeId[];    // 同章其它 chunk（防盲区觅食）
+}
+
+export interface JourneyPath {
+  repo: string;
+  steps: LearningStep[];  // 已按学习序排好
+}
+
+export interface Progress {
+  version: 1;
+  understood: NodeId[];   // 已标记理解的 chunk id
+}
