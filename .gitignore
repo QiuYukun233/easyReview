@@ -2,3 +2,5 @@ node_modules/
 target/
 dist/
 .DS_Store
+easyreview.tree.json
+easyreview.map.md
