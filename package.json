@@ -9,7 +9,8 @@
     "test:watch": "vitest",
     "map": "tsx src/cli.ts map",
     "learn": "tsx src/cli.ts learn",
-    "done": "tsx src/cli.ts done"
+    "done": "tsx src/cli.ts done",
+    "verify": "tsx src/cli.ts verify"
   },
   "dependencies": {
     "web-tree-sitter": "^0.22.6",

@@ -67,3 +67,19 @@ if (cmd === 'done') {
       .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
   );
 }
+
+if (cmd === 'verify') {
+  const rest = process.argv.slice(3);
+  const chunkId = rest.find((a, i) => !a.startsWith('--') && !(i > 0 && rest[i - 1].startsWith('--')));
+  if (!chunkId) { console.error('用法: easyreview verify <chunkId> [--predict a,b] [--repo <p>] [--out <d>]'); process.exit(1); }
+  const { repo, outDir } = parseArgs(rest);
+  const pi = rest.indexOf('--predict');
+  const predicted = pi >= 0 && rest[pi + 1] ? rest[pi + 1].split(',').map((s) => s.trim()).filter(Boolean) : null;
+  import('./cli-verify.js').then(({ runVerifyShow, runVerifyPredict }) =>
+    (predicted
+      ? runVerifyPredict({ repo, outDir, chunkId, predicted })
+      : runVerifyShow({ repo, outDir, chunkId }))
+      .then(() => console.log('✓ wrote easyreview.verify.md'))
+      .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
+  );
+}
