@@ -58,7 +58,8 @@ if (cmd === 'learn') {
 
 if (cmd === 'done') {
   const rest = process.argv.slice(3);
-  const chunkId = rest.find((a) => !a.startsWith('--'));
+  // 取第一个位置参数：跳过 --flag 本身及紧跟其后的取值（兼容 `done --out . <id>` 与 `done <id> --out .`）
+  const chunkId = rest.find((a, i) => !a.startsWith('--') && !(i > 0 && rest[i - 1].startsWith('--')));
   if (!chunkId) { console.error('用法: easyreview done <chunkId> [--out <dir>]'); process.exit(1); }
   import('./cli-learn.js').then(({ runDone }) =>
     runDone({ outDir: parseArgs(rest).outDir, chunkId })
