@@ -928,6 +928,8 @@ git commit -m "chore: ignore generated verify artifacts"
 
 **类型一致性**：`TestResult/CargoTestRun/MutationOp/BlastRadius/Verdict` 源自 Task 1；`Exec` 源自 Task 3；`withMutation/chooseMutation` 同在 mutate.ts；`probe(ProbeParams)→BlastRadius`、`judge(BlastRadius,string[])→Verdict` 贯穿一致；chunk.id=文件路径贯穿；`loadProgress/saveProgress/markUnderstood`、`parseArgs`、`runMap`、`GradedTree/Chunk/Leaf` 复用既有导出；`Progress.verified` 为可选，不破坏 Plan ②。
 
+**跨计划修复**：Plan ③ 给 `Progress` 加了可选 `verified`，但 Plan ② 的 `src/progress/progress.ts` 的 `loadProgress`/`markUnderstood` 原样重建对象、会丢掉 `verified`——已修（loadProgress 保留 `raw.verified`、markUnderstood 用 spread），否则验证第二块会覆盖第一块的 verified。含多块回归测试。
+
 **关键安全**：`withMutation` finally 无条件写回原文件 + 施突变前校验目标行 == op.original（不匹配即拒绝并不改文件）→ 绝不损坏 umwelt-bevy。测试覆盖"抛错也还原""行不匹配拒绝"。
 
 **已知 v1 近似（诚实标注）**：突变=注释单行（可能编译失败→当承重信号；可能空爆炸半径→当未覆盖信号）；断言由确定性模板生成（LLM 生成留后续）；仅 chem_field（grid_workshop 编译更重，后续扩）；judge 是精确集合匹配（compileBroke 时放宽）。均在 spec §11 风险清单内。
