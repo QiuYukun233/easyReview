@@ -58,7 +58,9 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 | `render/journey-md.ts` | 进度条 + 下一步卡片 |
 | `verify/parse.ts` | 解析 cargo test 输出（test…ok/FAILED + 编译崩）|
 | `verify/cargo.ts` | runCargoTests（可注入 exec，测试用 fake）|
-| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation |
+| `extract/parser.ts` | 共享 Rust tree-sitter parser 单例 getRustParser（rust.ts + pick-site.ts 复用）|
+| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：优先 tree-sitter 好语句、regex 兜底）|
+| `verify/pick-site.ts` | pickPreferredSite：tree-sitter 挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail |
 | `verify/probe.ts` | 爆炸半径探针（基线→突变→跑→diff→还原）|
 | `verify/judge.ts` | 判定预测 vs 真实爆炸半径 |
 | `cli.ts` / `cli-learn.ts` / `cli-verify.ts` | CLI 命令 map / learn / done / verify |
@@ -70,7 +72,7 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
    - **测试要点**：把 Labeler 抽成接口，测试注入 fake labeler（不打真实 API）；真实 Claude 只在 observe 冒烟。
    - claude-api 参考已在会话里加载过；铁律仍是"LLM 只贴标签、不发明结构"。
 2. **verify 扩到 grid_workshop**（编译更重，需处理 UI/render 测试）。
-3. **更聪明的突变位点**：`chooseMutation` 现在挑第一个 loc≥3 函数的第一条语句，对 `field.rs` 挑到了 `Field::new` 的构造体返回 → 注释后是**编译崩**（承重信号，但教学不如"某个具体测试变红"丰富）。改进：跳过纯构造体/单一 tail 表达式，偏好逻辑函数体中间的语句 → 得到具体测试失败。
+3. ~~**更聪明的突变位点**~~ ✅ 已完成（分支 feat/smarter-mutation-site，见 `docs/superpowers/plans/2026-07-07-smarter-mutation-site.md`）。`chooseMutation` 改成 async 编排器：先用 tree-sitter 挑"好语句"（赋值/复合赋值/裸调用，含 `?`/`.await`/括号包装下钻），注释后大概率某测试变红而非编译崩；挑不到回退现有 regex 扫描（绝不退步）。顺手抽了共享 `getRustParser`。`withMutation` 还原逻辑一行未动。
 4. **web viewer**：会点亮的地图 + 进度条的可视化版（当前只有 Markdown）。
 
 ## 一些工作方式上值得记住的经验
