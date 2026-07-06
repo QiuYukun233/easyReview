@@ -43,9 +43,10 @@ export function renderJourneyMarkdown(g: GradedTree, path: JourneyPath, progress
   lines.push(`- 所在章：${chapter.name}`);
   lines.push(`- 文件：\`${chunk.file}\``);
   lines.push(`- 风险：${RISK[grade.riskBucket]} · 架构贡献度：${CONTRIB[grade.contribBucket]}`);
+  const oneLine = (s: string) => s.replace(/\s*\n\s*/g, ' ').trim();
   const label = labels?.entries[next.chunkId];
-  if (label) lines.push(`- 职责：${label.responsibility}`);
-  lines.push(`- 为什么现在学它：${label ? label.whyNow : whyNow(grade)}`);
+  if (label) lines.push(`- 职责：${oneLine(label.responsibility)}`);
+  lines.push(`- 为什么现在学它：${label ? oneLine(label.whyNow) : whyNow(grade)}`);
   lines.push('');
   lines.push(`### 它有哪些函数（${leaves.length}）`);
   if (leaves.length === 0) lines.push('- （本文件无独立函数，可能是模块声明/重导出）');

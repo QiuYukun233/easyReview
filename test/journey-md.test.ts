@@ -81,4 +81,13 @@ describe('renderJourneyMarkdown labels', () => {
     expect(md).not.toContain('- 职责：');
     expect(md).toContain('用来先熟悉项目的词汇与惯用法'); // filler 静态文案
   });
+
+  it('collapses newlines in label strings so the card stays single-line', () => {
+    const g = gradedForLabels();
+    const labels: LabelCache = { version: 1, entries: { 'a.rs': { responsibility: '第一行\n第二行', whyNow: 'A\nB', contentHash: 'h' } } };
+    const md = renderJourneyMarkdown(g, buildPath(g), emptyProgress, labels);
+    expect(md).toContain('- 职责：第一行 第二行');
+    expect(md).toContain('为什么现在学它：A B');
+    expect(md).not.toContain('第一行\n第二行');
+  });
 });
