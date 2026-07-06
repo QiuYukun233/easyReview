@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import type { ChunkLabelInput, LabelCache, ChunkLabel, NodeId } from '../types.js';
 
 export function computeContentHash(functions: { name: string; source: string }[]): string {
@@ -34,9 +34,11 @@ export function mergeLabels(
 }
 
 export function loadLabelCache(path: string): LabelCache {
+  if (!existsSync(path)) return { version: 1, entries: {} };
   try {
     return JSON.parse(readFileSync(path, 'utf8')) as LabelCache;
   } catch {
+    console.warn('⚠ easyreview.labels.json 解析失败，忽略并重建缓存');
     return { version: 1, entries: {} };
   }
 }

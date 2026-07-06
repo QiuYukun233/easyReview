@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -52,5 +52,25 @@ describe('label cache', () => {
     const cache: LabelCache = { version: 1, entries: { 'a.rs': { responsibility: 'r', whyNow: 'w', contentHash: 'H' } } };
     saveLabelCache(p, cache);
     expect(loadLabelCache(p)).toEqual(cache);
+  });
+
+  it('loadLabelCache warns and returns empty on corrupt file (never throws)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lbl-')); cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    const p = join(dir, 'labels.json');
+    writeFileSync(p, 'not valid json {');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(loadLabelCache(p)).toEqual({ version: 1, entries: {} });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('mergeLabels skips a fresh id absent from inputs', () => {
+    const merged = mergeLabels(
+      { version: 1, entries: {} },
+      [mkInput('a.rs', 'A')],
+      { 'ghost.rs': { responsibility: 'x', whyNow: 'y' } },
+    );
+    expect(merged.entries['ghost.rs']).toBeUndefined();
+    expect(merged.entries['a.rs']).toBeUndefined();
   });
 });
