@@ -34,4 +34,19 @@ describe('ClaudeLabeler', () => {
     const out = await labeler.label([mkInput('a.rs', 'x')]);
     expect(out).toEqual({});
   });
+
+  it('is per-chunk resilient: one chunk failing does not abort the batch', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const parse = vi.fn(async (args: any) => {
+      if (args.messages[0].content.includes('BOOM')) throw new Error('kaboom');
+      return { parsed_output: { responsibility: 'R', whyNow: 'W' } };
+    });
+    const labeler = new ClaudeLabeler({ messages: { parse } } as any, 'claude-haiku-4-5');
+    const out = await labeler.label([mkInput('bad.rs', 'fn f(){ BOOM }'), mkInput('good.rs', 'fn f(){}')]);
+
+    expect(out['good.rs']).toEqual({ responsibility: 'R', whyNow: 'W' });
+    expect(out['bad.rs']).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });
