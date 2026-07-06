@@ -9,8 +9,18 @@ import { ownershipConcentration } from './grade/ownership.js';
 import { nameFanInCentrality } from './grade/centrality.js';
 import { gradeTree } from './grade/grade.js';
 import { renderMapMarkdown } from './render/map-md.js';
+import type { Labeler } from './types.js';
+import { collectLabelInputs, labelChunks } from './label/label.js';
+import { loadLabelCache, saveLabelCache } from './label/cache.js';
+import { makeClaudeLabelerFromEnv } from './label/claude.js';
 
-export interface MapOptions { repo: string; outDir: string; }
+export interface MapOptions {
+  repo: string;
+  outDir: string;
+  labeler?: Labeler | null; // 测试注入 fake；显式 null = 不打标签；缺省 = 按 env 决定
+  noLabel?: boolean;        // --no-label：即使有 key 也跳过
+  model?: string;           // --model：覆盖默认 claude-haiku-4-5
+}
 
 export async function runMap(opts: MapOptions): Promise<void> {
   const { repo, outDir } = opts;
@@ -31,6 +41,18 @@ export async function runMap(opts: MapOptions): Promise<void> {
 
   writeFileSync(join(outDir, 'easyreview.tree.json'), JSON.stringify(graded, null, 2));
   writeFileSync(join(outDir, 'easyreview.map.md'), renderMapMarkdown(graded));
+
+  // ── LLM 块标签（纯增强；无论如何 tree/map 已经落盘）──
+  const labelPath = join(outDir, 'easyreview.labels.json');
+  const cache = loadLabelCache(labelPath);
+  const inputs = collectLabelInputs(graded, sources);
+  const labeler = opts.noLabel
+    ? null
+    : opts.labeler !== undefined
+      ? opts.labeler
+      : makeClaudeLabelerFromEnv(opts.model);
+  const updated = await labelChunks(inputs, cache, labeler);
+  saveLabelCache(labelPath, updated);
 }
 
 function parseArgs(argv: string[]): MapOptions {
@@ -38,13 +60,18 @@ function parseArgs(argv: string[]): MapOptions {
     const i = argv.indexOf(flag);
     return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
   };
-  return { repo: get('--repo', process.cwd()), outDir: get('--out', process.cwd()) };
+  return {
+    repo: get('--repo', process.cwd()),
+    outDir: get('--out', process.cwd()),
+    noLabel: argv.includes('--no-label'),
+    model: argv.indexOf('--model') >= 0 ? get('--model', '') || undefined : undefined,
+  };
 }
 
 const cmd = process.argv[2];
 if (cmd === 'map') {
   runMap(parseArgs(process.argv.slice(3)))
-    .then(() => console.log('✓ wrote easyreview.tree.json + easyreview.map.md'))
+    .then(() => console.log('✓ wrote easyreview.tree.json + easyreview.map.md + labels.json'))
     .catch((e) => { console.error(e); process.exit(1); });
 }
 
