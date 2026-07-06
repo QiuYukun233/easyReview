@@ -44,10 +44,13 @@ export async function pickPreferredSite(
     const inner = unwrap(n.namedChild(0));
     return !!inner && TARGET.has(inner.type);
   });
-  tree.delete();
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    tree.delete();
+    return null;
+  }
   candidates.sort((a, b) => a.startIndex - b.startIndex); // 源码顺序
   const row = candidates[0].startPosition.row;
+  tree.delete();
   return { line: row + 1, original: lines[row] };
 }
