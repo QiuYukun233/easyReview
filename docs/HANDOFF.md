@@ -33,9 +33,11 @@ npm run map   -- --repo D:/dev/umwelt-bevy --out .
 npm run learn -- --out .
 npm run done  -- <chunkId> --out .                        # 标记某块已理解，进度前进、章级点亮 ✓
 
-# ③ 执行验证（护城河）：仅 chem_field
+# ③ 执行验证（护城河）：任意 crate（crate 从块自己的 chunk.crate 推导，不再只限 chem_field）
 npm run verify -- crates/chem_field/src/core/field.rs --repo D:/dev/umwelt-bevy --out .
-#   → 跑基线 cargo、显示突变位点 + 21 个测试名 + "预测哪些会崩"
+#   → 跑基线 cargo、显示突变位点 + 测试名（按 :: 模块分组）+ "预测哪些会崩"
+#   → grid_workshop 也支持（201 测试、bevy/egui 链接重）；show 会先打一行"首次编译可能数分钟"警告
+#   → 基线编译不过会明确报错（不再误报为"未覆盖"）
 npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测试名> --repo D:/dev/umwelt-bevy --out .
 #   → 注释一行、跑 cargo、算真实爆炸半径、比对你的预测、通过则标 verified（还原原文件）
 ```
@@ -69,7 +71,7 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
    - 技术：`@anthropic-ai/sdk` 的 `client.messages.parse()` + `zodOutputFormat`（`@anthropic-ai/sdk/helpers/zod`），默认模型 `claude-opus-4-8`（可配置成 haiku 做廉价批量），`output_config.effort:'low'`，认证 `new Anthropic()`（读 ANTHROPIC_API_KEY / `ant auth login` profile）。
    - **测试要点**：把 Labeler 抽成接口，测试注入 fake labeler（不打真实 API）；真实 Claude 只在 observe 冒烟。
    - claude-api 参考已在会话里加载过；铁律仍是"LLM 只贴标签、不发明结构"。
-2. **verify 扩到 grid_workshop**（编译更重，需处理 UI/render 测试）。
+2. ~~**verify 扩到 grid_workshop**~~ ✅ 已完成（分支 feat/verify-any-crate，见 `docs/superpowers/plans/2026-07-06-verify-any-crate.md`）。verify 现支持任意 crate（crate 从块推导）；测试名按 `::` 模块分组；首次冷编译打警告；基线编译失败明确报错。勘察发现 grid_workshop 的 201 个测试基本是纯逻辑测试，无需 headless——障碍只是编译重 + 列表长。
 3. **更聪明的突变位点**：`chooseMutation` 现在挑第一个 loc≥3 函数的第一条语句，对 `field.rs` 挑到了 `Field::new` 的构造体返回 → 注释后是**编译崩**（承重信号，但教学不如"某个具体测试变红"丰富）。改进：跳过纯构造体/单一 tail 表达式，偏好逻辑函数体中间的语句 → 得到具体测试失败。
 4. **web viewer**：会点亮的地图 + 进度条的可视化版（当前只有 Markdown）。
 
