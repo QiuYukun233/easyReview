@@ -27,7 +27,7 @@
 | `src/cli-verify.ts` | `runVerifyShow` 里 `chooseMutation(...)` 改 `await` | Modify |
 | `test/parser.test.ts` | 无需——由 rust/tree 现有测试回归保障（见 Task 1） | — |
 | `test/pick-site.test.ts` | `pickPreferredSite` 单测（真实 tree-sitter） | Create |
-| `test/mutate.test.ts` | 加 `chooseMutation` 用例（升级 + 回退）；现有 withMutation 用例不动 | Modify |
+| `test/choose-mutation.test.ts` | **已存在**——重写为 async + 升级断言（chooseMutation 测试统一在此）；`test/mutate.test.ts` 只测 withMutation、不动 | Modify |
 
 ---
 
@@ -248,63 +248,69 @@ git commit -m "feat(verify): pickPreferredSite（tree-sitter 挑赋值/调用语
 **Files:**
 - Modify: `src/verify/mutate.ts`
 - Modify: `src/cli-verify.ts`
-- Test: `test/mutate.test.ts`
+- Test: `test/choose-mutation.test.ts`（**已存在**，重写为 async + 升级断言）
 
-先读 `src/verify/mutate.ts` 对齐现状（有 `withMutation`、`isCommentable`、同步 `chooseMutation`）。
+先读 `src/verify/mutate.ts`（有 `withMutation`、`isCommentable`、同步 `chooseMutation`）**和** `test/choose-mutation.test.ts`（已存在，测同步 chooseMutation，其 test-1 断言挑第 6 行 `let dt = 0.1;` = 旧行为）对齐现状。
 
-- [ ] **Step 1: 扩展 `test/mutate.test.ts`（加 chooseMutation 用例，先写、确认失败）**
+> **关键**：`test/choose-mutation.test.ts` 已存在并测**同步** chooseMutation。async 化会打破它——这是**预期的**：它编码的是旧的"挑第一条可注释行"行为，而新行为应升级到"挑复合赋值 `self.value += dt;`"。本任务**重写**这个文件（不是往 mutate.test.ts 另加）。`test/mutate.test.ts` 只测 withMutation，保持不动。
 
-在文件顶部 import 追加 `chooseMutation` 与类型：
+- [ ] **Step 1: 重写 `test/choose-mutation.test.ts`（先写、确认失败）**
 
-```ts
-import { withMutation, chooseMutation } from '../src/verify/mutate.js';
-import type { MutationOp, Chunk, Leaf } from '../src/types.js';
-```
-
-在文件末尾新增一个 describe（现有 withMutation 用例保持不动）：
+用以下内容**整体替换** `test/choose-mutation.test.ts`：
 
 ```ts
-function chunkOf(file: string): Chunk {
-  return { id: file, name: 'x', file, crate: 'k', leafIds: [] };
-}
-function leaf(file: string, startLine: number, endLine: number): Leaf {
-  return { id: `${file}::f::${startLine}`, kind: 'fn', name: 'f', file, startLine, endLine, loc: endLine - startLine + 1 };
-}
+import { describe, it, expect } from 'vitest';
+import { chooseMutation } from '../src/verify/mutate.js';
+import type { Chunk, Leaf } from '../src/types.js';
+
+const chunk: Chunk = { id: 'crates/chem_field/src/core/field.rs', name: 'field', file: 'crates/chem_field/src/core/field.rs', crate: 'chem_field', leafIds: ['f::step::5'] };
+const leaves: Leaf[] = [
+  { id: 'f::step::5', kind: 'fn', name: 'step', file: chunk.file, startLine: 5, endLine: 9, loc: 5 },
+];
 
 describe('chooseMutation', () => {
-  it('upgrades: picks a preferred assignment statement via tree-sitter', async () => {
-    const file = 'a.rs';
-    const src = 'fn step(&mut self) {\n    let a = 1;\n    self.x = compute();\n}\n';
-    const op = await chooseMutation(chunkOf(file), [leaf(file, 1, 4)], src);
+  it('upgrades: prefers the compound-assignment statement over the earlier let binding', async () => {
+    const source = [
+      'line1', 'line2', 'line3', 'line4',
+      'pub fn step(&mut self) {',   // 5
+      '    let dt = 0.1;',          // 6  (旧行为会挑这行)
+      '    self.value += dt;',      // 7  (新行为：复合赋值=好语句，优先)
+      '}',                          // 8
+    ].join('\n');
+    const op = (await chooseMutation(chunk, leaves, source))!;
     expect(op).not.toBeNull();
-    expect(op!.line).toBe(3);
-    expect(op!.original).toBe('    self.x = compute();');
-    expect(op!.mutated).toBe('    // self.x = compute();');
+    expect(op.file).toBe(chunk.file);
+    expect(op.line).toBe(7);
+    expect(op.original).toBe('    self.value += dt;');
+    expect(op.mutated).toBe('    // self.value += dt;');
   });
 
-  it('falls back to regex scan when no preferred statement exists (never regresses)', async () => {
-    const file = 'b.rs';
-    // 只有 let + tail，无赋值/调用语句 → pickPreferredSite 返回 null → 回退 regex
-    const src = 'fn f() -> i32 {\n    let dt = 1;\n    dt + 1\n}\n';
-    const op = await chooseMutation(chunkOf(file), [leaf(file, 1, 4)], src);
+  it('falls back to regex when no preferred statement exists (never regresses)', async () => {
+    const source = [
+      'line1', 'line2', 'line3', 'line4',
+      'pub fn calc() -> f32 {',   // 5
+      '    let dt = 0.1;',        // 6  (只有 let + tail，无好语句)
+      '    dt + 1.0',             // 7  (tail 表达式，不选)
+      '}',                        // 8
+    ].join('\n');
+    const op = (await chooseMutation(chunk, leaves, source))!;
     expect(op).not.toBeNull();
-    expect(op!.line).toBe(2); // regex 挑第一条 commentable：let dt = 1;
-    expect(op!.original).toBe('    let dt = 1;');
+    expect(op.line).toBe(6); // 回退 regex：第一条 commentable 是 let dt = 0.1;
+    expect(op.original).toBe('    let dt = 0.1;');
+    expect(op.mutated).toBe('    // let dt = 0.1;');
   });
 
-  it('returns null when nothing is mutatable', async () => {
-    const file = 'c.rs';
-    const src = 'fn f() {}\n';
-    const op = await chooseMutation(chunkOf(file), [leaf(file, 1, 1)], src);
-    expect(op).toBeNull();
+  it('returns null when no commentable line exists', async () => {
+    const emptyLeaf: Leaf[] = [{ id: 'x', kind: 'fn', name: 'x', file: chunk.file, startLine: 1, endLine: 2, loc: 2 }];
+    expect(await chooseMutation(chunk, emptyLeaf, 'pub fn x() {}\n')).toBeNull();
   });
 });
 ```
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `npx vitest run test/mutate.test.ts`
-Expected: FAIL — `chooseMutation` 尚未导出为 async、或调用形态不符（当前是同步且签名相同但返回非 Promise；async 化后新用例才通过）。现有 withMutation 三个用例仍通过。
+Run: `npx vitest run test/choose-mutation.test.ts`
+Expected: FAIL — 现同步 `chooseMutation` 返回的不是 Promise，`await` 后 `.line` 断言不符（尤其升级用例期望第 7 行，旧同步实现给第 6 行）。async 化 + prefer 逻辑后才通过。
 
 - [ ] **Step 3: 改 `src/verify/mutate.ts`**
 
@@ -365,8 +371,8 @@ export async function chooseMutation(chunk: Chunk, leaves: Leaf[], source: strin
 
 - [ ] **Step 5: 跑测试确认通过**
 
-Run: `npx vitest run test/mutate.test.ts`
-Expected: PASS（withMutation 3 + chooseMutation 3）。
+Run: `npx vitest run test/choose-mutation.test.ts`
+Expected: PASS（3 tests：升级 / 回退 / null）。`test/mutate.test.ts`（withMutation）未动、仍绿。
 
 - [ ] **Step 6: 全量 + typecheck**
 
@@ -376,7 +382,7 @@ Run: `npx tsc --noEmit` — 干净。
 - [ ] **Step 7: 提交**
 
 ```bash
-git add src/verify/mutate.ts src/cli-verify.ts test/mutate.test.ts
+git add src/verify/mutate.ts src/cli-verify.ts test/choose-mutation.test.ts
 git commit -m "feat(verify): chooseMutation 优先挑好语句（tree-sitter），regex 兜底；调用点 await"
 ```
 
