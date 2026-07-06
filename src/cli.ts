@@ -22,6 +22,12 @@ export interface MapOptions {
   model?: string;           // --model：覆盖默认 claude-haiku-4-5
 }
 
+function resolveLabeler(opts: MapOptions): Labeler | null {
+  if (opts.noLabel) return null;
+  if (opts.labeler !== undefined) return opts.labeler; // 显式注入（含 null）优先
+  return makeClaudeLabelerFromEnv(opts.model);
+}
+
 export async function runMap(opts: MapOptions): Promise<void> {
   const { repo, outDir } = opts;
   const tree = await buildTree(repo);
@@ -46,11 +52,7 @@ export async function runMap(opts: MapOptions): Promise<void> {
   const labelPath = join(outDir, 'easyreview.labels.json');
   const cache = loadLabelCache(labelPath);
   const inputs = collectLabelInputs(graded, sources);
-  const labeler = opts.noLabel
-    ? null
-    : opts.labeler !== undefined
-      ? opts.labeler
-      : makeClaudeLabelerFromEnv(opts.model);
+  const labeler = resolveLabeler(opts);
   const updated = await labelChunks(inputs, cache, labeler);
   saveLabelCache(labelPath, updated);
 }
@@ -64,7 +66,7 @@ function parseArgs(argv: string[]): MapOptions {
     repo: get('--repo', process.cwd()),
     outDir: get('--out', process.cwd()),
     noLabel: argv.includes('--no-label'),
-    model: argv.indexOf('--model') >= 0 ? get('--model', '') || undefined : undefined,
+    model: get('--model', '') || undefined,
   };
 }
 
