@@ -25,7 +25,12 @@ export function collectLabelInputs(g: GradedTree, sources: Record<string, string
       contribBucket: grade.contribBucket,
       functions,
       neighbors,
-      contentHash: computeContentHash(functions),
+      contentHash: computeContentHash({
+        functions,
+        riskBucket: grade.riskBucket,
+        contribBucket: grade.contribBucket,
+        neighbors,
+      }),
     };
   });
 }

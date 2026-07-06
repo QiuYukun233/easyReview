@@ -17,12 +17,13 @@ let cleanups: Array<() => void> = [];
 afterEach(() => { cleanups.forEach((c) => c()); cleanups = []; });
 
 describe('label cache', () => {
-  it('computeContentHash is deterministic and sensitive to source', () => {
-    const a = computeContentHash([{ name: 'f', source: 'x' }]);
-    const b = computeContentHash([{ name: 'f', source: 'x' }]);
-    const c = computeContentHash([{ name: 'f', source: 'y' }]);
-    expect(a).toBe(b);
-    expect(a).not.toBe(c);
+  it('computeContentHash is deterministic and sensitive to source, buckets, and neighbors', () => {
+    const base = { functions: [{ name: 'f', source: 'x' }], riskBucket: 'low', contribBucket: 'filler', neighbors: [] as string[] };
+    expect(computeContentHash(base)).toBe(computeContentHash({ ...base }));
+    expect(computeContentHash(base)).not.toBe(computeContentHash({ ...base, functions: [{ name: 'f', source: 'y' }] }));
+    expect(computeContentHash(base)).not.toBe(computeContentHash({ ...base, riskBucket: 'high' }));
+    expect(computeContentHash(base)).not.toBe(computeContentHash({ ...base, contribBucket: 'high' }));
+    expect(computeContentHash(base)).not.toBe(computeContentHash({ ...base, neighbors: ['n'] }));
   });
 
   it('selectStale returns missing or hash-changed inputs only', () => {

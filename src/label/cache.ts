@@ -2,9 +2,18 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import type { ChunkLabelInput, LabelCache, ChunkLabel, NodeId } from '../types.js';
 
-export function computeContentHash(functions: { name: string; source: string }[]): string {
+export function computeContentHash(parts: {
+  functions: { name: string; source: string }[];
+  riskBucket: string;
+  contribBucket: string;
+  neighbors: string[];
+}): string {
   const h = createHash('sha256');
-  for (const f of functions) {
+  h.update(parts.riskBucket); h.update('\0');
+  h.update(parts.contribBucket); h.update('\0');
+  for (const n of parts.neighbors) { h.update(n); h.update('\0'); }
+  h.update('\0');
+  for (const f of parts.functions) {
     h.update(f.name); h.update('\0'); h.update(f.source); h.update('\0');
   }
   return h.digest('hex');
