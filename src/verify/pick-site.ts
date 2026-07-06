@@ -8,6 +8,15 @@ const TARGET = new Set([
   'macro_invocation',
 ]);
 
+// 包装表达式：try(`x?`)/await(`x.await`)/括号(`(x)`)——下钻到内层真正的调用/赋值
+const WRAPPERS = new Set(['try_expression', 'await_expression', 'parenthesized_expression']);
+
+function unwrap(node: Parser.SyntaxNode | null): Parser.SyntaxNode | null {
+  let n = node;
+  while (n && WRAPPERS.has(n.type)) n = n.namedChild(0);
+  return n;
+}
+
 /**
  * 用 tree-sitter 挑一个"好语句"位点：单行的 expression_statement，其首个具名子节点
  * 是赋值/复合赋值/裸调用/宏调用——注释后大概率某测试变红（而非编译崩）。
@@ -32,7 +41,7 @@ export async function pickPreferredSite(
 
   const candidates = stmts.filter((n) => {
     if (n.startPosition.row !== n.endPosition.row) return false; // 仅单行
-    const inner = n.namedChild(0);
+    const inner = unwrap(n.namedChild(0));
     return !!inner && TARGET.has(inner.type);
   });
   tree.delete();

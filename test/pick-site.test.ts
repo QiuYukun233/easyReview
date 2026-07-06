@@ -36,4 +36,24 @@ describe('pickPreferredSite', () => {
     const src = 'fn f(&mut self) {\n    self.do_it(\n        1,\n    );\n}\n';
     expect(await pickPreferredSite(src)).toBeNull();
   });
+
+  it('unwraps a ?-terminated call statement', async () => {
+    const src = 'fn f(&mut self) -> Result<(), E> {\n    self.step()?;\n    Ok(())\n}\n';
+    expect(await pickPreferredSite(src)).toEqual({ line: 2, original: '    self.step()?;' });
+  });
+
+  it('unwraps a .await call statement', async () => {
+    const src = 'fn f(&mut self) {\n    self.step().await;\n}\n';
+    expect(await pickPreferredSite(src)).toEqual({ line: 2, original: '    self.step().await;' });
+  });
+
+  it('picks a macro invocation statement', async () => {
+    const src = 'fn f() {\n    println!("{}", 1);\n}\n';
+    expect(await pickPreferredSite(src)).toEqual({ line: 2, original: '    println!("{}", 1);' });
+  });
+
+  it('descends into nested control-flow blocks', async () => {
+    const src = 'fn f(&mut self) {\n    if cond {\n        self.x = 1;\n    }\n}\n';
+    expect(await pickPreferredSite(src)).toEqual({ line: 3, original: '        self.x = 1;' });
+  });
 });
