@@ -33,6 +33,9 @@ export async function runVerifyShow(o: ShowOpts): Promise<void> {
 
   console.error(`⏳ 首次编译 ${crate} 可能要几分钟（bevy/egui 链接很重），属正常、不是卡住。`);
   const baseline = await runCargoTests(o.repo, crate, o.exec);
+  if (!baseline.compiled) {
+    throw new Error(`${crate} 的基线 cargo test 无法编译——先修好编译错误再验证这个块。`);
+  }
   const green = baseline.results.filter((r) => r.passed).map((r) => r.name);
   const all = baseline.results.map((r) => r.name);
   writeFileSync(baselinePath(o.outDir), JSON.stringify({ green, all, op }, null, 2));

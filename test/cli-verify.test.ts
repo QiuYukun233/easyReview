@@ -72,4 +72,18 @@ describe('verify show/predict', () => {
     const progress = JSON.parse(readFileSync(join(dir, 'easyreview.progress.json'), 'utf8'));
     expect(progress.verified).toContain(chunkId);
   });
+
+  it('rejects a chunk whose baseline crate fails to compile', async () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    writeRepoFile(dir, 'crates/broken/Cargo.toml', '[package]\nname="broken"');
+    writeRepoFile(dir, 'crates/broken/src/lib.rs', 'pub fn f(x: i32) -> i32 {\n    let y = 1;\n    x + y\n}\n');
+    commitAll(dir, 'init');
+    await runMap({ repo: dir, outDir: dir });
+
+    const chunkId = 'crates/broken/src/lib.rs';
+    const fakeExec = async () => 'error[E0425]: cannot find value `foo` in this scope\nerror: could not compile `broken`';
+    await expect(
+      runVerifyShow({ repo: dir, outDir: dir, chunkId, exec: fakeExec }),
+    ).rejects.toThrow(/无法编译/);
+  });
 });
