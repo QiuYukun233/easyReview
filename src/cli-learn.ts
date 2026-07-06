@@ -5,6 +5,7 @@ import { buildPath } from './path/sequence.js';
 import { loadProgress, saveProgress, markUnderstood } from './progress/progress.js';
 import { renderJourneyMarkdown } from './render/journey-md.js';
 import { renderMapMarkdown } from './render/map-md.js';
+import { loadLabelCache } from './label/cache.js';
 
 function loadTree(outDir: string): GradedTree {
   const p = join(outDir, 'easyreview.tree.json');
@@ -22,7 +23,8 @@ function progressPath(outDir: string): string {
 function rerender(outDir: string, tree: GradedTree): void {
   const path = buildPath(tree);
   const progress = loadProgress(progressPath(outDir));
-  writeFileSync(join(outDir, 'easyreview.journey.md'), renderJourneyMarkdown(tree, path, progress));
+  const labels = loadLabelCache(join(outDir, 'easyreview.labels.json'));
+  writeFileSync(join(outDir, 'easyreview.journey.md'), renderJourneyMarkdown(tree, path, progress, labels));
   writeFileSync(join(outDir, 'easyreview.map.md'), renderMapMarkdown(tree, new Set(progress.understood)));
 }
 
