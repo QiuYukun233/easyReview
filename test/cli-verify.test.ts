@@ -38,4 +38,38 @@ describe('verify show/predict', () => {
     expect(progress.verified).toContain(chunkId);
     expect(progress.understood).toContain(chunkId);
   });
+
+  it('works for a non-chem_field crate and groups tests by module', async () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    writeRepoFile(dir, 'crates/grid_workshop/Cargo.toml', '[package]\nname="grid_workshop"');
+    writeRepoFile(dir, 'crates/grid_workshop/src/build_ui/routing_fsm.rs',
+      'pub fn route(x: i32) -> i32 {\n    let step = 1;\n    x + step\n}\n');
+    commitAll(dir, 'init');
+    await runMap({ repo: dir, outDir: dir });
+
+    const chunkId = 'crates/grid_workshop/src/build_ui/routing_fsm.rs';
+    let phase = 'baseline';
+    let seenCrate = '';
+    const fakeExec = async (_cmd: string, args: string[]) => {
+      const pi = args.indexOf('-p');
+      if (pi >= 0) seenCrate = args[pi + 1];
+      return phase === 'baseline'
+        ? 'test build_ui::routing_fsm::t1 ... ok\ntest build_ui::routing_fsm::t2 ... ok'
+        : 'test build_ui::routing_fsm::t1 ... ok\ntest build_ui::routing_fsm::t2 ... FAILED';
+    };
+
+    await runVerifyShow({ repo: dir, outDir: dir, chunkId, exec: fakeExec });
+    expect(seenCrate).toBe('grid_workshop');
+    const show = readFileSync(join(dir, 'easyreview.verify.md'), 'utf8');
+    expect(show).toContain('### build_ui::routing_fsm');
+    expect(show).toContain('build_ui::routing_fsm::t1');
+    expect(show).toContain('`grid_workshop` 的测试');
+
+    phase = 'mutated';
+    await runVerifyPredict({ repo: dir, outDir: dir, chunkId, predicted: ['build_ui::routing_fsm::t2'], exec: fakeExec });
+    const verdict = readFileSync(join(dir, 'easyreview.verify.md'), 'utf8');
+    expect(verdict).toContain('通过');
+    const progress = JSON.parse(readFileSync(join(dir, 'easyreview.progress.json'), 'utf8'));
+    expect(progress.verified).toContain(chunkId);
+  });
 });
