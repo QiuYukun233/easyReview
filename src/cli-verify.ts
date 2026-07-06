@@ -29,7 +29,7 @@ export async function runVerifyShow(o: ShowOpts): Promise<void> {
   const chunk = findChunk(g, o.chunkId);
   const source = readFileSync(join(o.repo, chunk.file), 'utf8');
   const leaves = g.leaves.filter((l) => l.file === chunk.file);
-  const op = chooseMutation(chunk, leaves, source);
+  const op = await chooseMutation(chunk, leaves, source);
   if (!op) throw new Error(`${chunk.file} 找不到可突变的语句行——换个块试试`);
 
   const baseline = await runCargoTests(o.repo, CRATE, o.exec);

@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { Chunk, Leaf, MutationOp } from '../types.js';
+import { pickPreferredSite } from './pick-site.js';
 
 /**
  * 在 absFile 上临时施突变、跑 fn、无条件还原。
@@ -32,22 +33,31 @@ function isCommentable(line: string): boolean {
   return true;
 }
 
-/** 为一个 chunk 选一个突变位点（注释掉某函数体内第一条语句）。找不到返回 null。 */
-export function chooseMutation(chunk: Chunk, leaves: Leaf[], source: string): MutationOp | null {
+function buildOp(file: string, line: number, original: string): MutationOp {
+  const indent = original.match(/^\s*/)?.[0] ?? '';
+  return {
+    file,
+    line,
+    original,
+    mutated: `${indent}// ${original.trim()}`,
+    description: `注释掉 ${file}:${line} 的一行语句`,
+  };
+}
+
+/** 为一个 chunk 选突变位点：优先 tree-sitter 挑"好语句"（赋值/调用→大概率红测试），
+ *  挑不到回退现有 regex 扫描（loc≥3 函数逐行找第一条可注释语句）。都没有返回 null。 */
+export async function chooseMutation(chunk: Chunk, leaves: Leaf[], source: string): Promise<MutationOp | null> {
+  const pref = await pickPreferredSite(source);
+  if (pref) return buildOp(chunk.file, pref.line, pref.original);
+
+  // 回退：现有 regex 逻辑（绝不退步）
   const lines = source.split('\n');
   const fns = leaves.filter((l) => l.file === chunk.file && l.loc >= 3).sort((a, b) => a.startLine - b.startLine);
   for (const fn of fns) {
     for (let ln = fn.startLine; ln <= fn.endLine; ln++) {
       const original = lines[ln - 1];
       if (original !== undefined && isCommentable(original)) {
-        const indent = original.match(/^\s*/)?.[0] ?? '';
-        return {
-          file: chunk.file,
-          line: ln,
-          original,
-          mutated: `${indent}// ${original.trim()}`,
-          description: `注释掉 ${chunk.file}:${ln} 的一行语句`,
-        };
+        return buildOp(chunk.file, ln, original);
       }
     }
   }
