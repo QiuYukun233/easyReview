@@ -1,13 +1,17 @@
 import Parser from 'web-tree-sitter';
-import { getRustParser } from './parser.js';
+import { getParser } from './parser.js';
+import type { LangSpec } from './lang.js';
 import type { Leaf } from '../types.js';
 
-const QUERY = '(function_item name: (identifier) @name) @fn';
-let query: Parser.Query | null = null;
+const queries = new Map<string, Parser.Query>();
 
-export async function extractLeaves(file: string, source: string): Promise<Leaf[]> {
-  const { parser, lang } = await getRustParser();
-  if (!query) query = lang.query(QUERY);
+export async function extractLeaves(file: string, source: string, spec: LangSpec): Promise<Leaf[]> {
+  const { parser, lang } = await getParser(spec);
+  let query = queries.get(spec.id);
+  if (!query) {
+    query = lang.query(spec.query);
+    queries.set(spec.id, query);
+  }
   const tree = parser.parse(source);
   const leaves: Leaf[] = [];
   for (const m of query.matches(tree.rootNode)) {

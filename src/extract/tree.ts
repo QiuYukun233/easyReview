@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { listTrackedFiles } from '../git.js';
-import { extractLeaves } from './rust.js';
+import { extractLeaves } from './leaves.js';
+import { RUST } from './lang.js';
 import type { Tree, Chapter, Chunk, Leaf } from '../types.js';
 
 function crateOf(file: string): string {
@@ -32,7 +33,7 @@ export async function buildTree(repo: string): Promise<Tree> {
     const crate = crateOf(file);
     const dir = dirOf(file, crate);
     const source = readFileSync(join(repo, file), 'utf8');
-    const fileLeaves = await extractLeaves(file, source);
+    const fileLeaves = await extractLeaves(file, source, RUST);
     leaves.push(...fileLeaves);
 
     const chunk: Chunk = {
