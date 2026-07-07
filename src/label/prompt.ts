@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ChunkLabelInput } from '../types.js';
+import { langOf } from '../extract/lang.js';
 
 export const LabelSchema = z.object({
   responsibility: z.string(),
@@ -14,8 +15,9 @@ export const BASE_SYSTEM =
   '严禁发明输入中未出现的结构、依赖或调用关系。只描述给定的内容。';
 
 export function userPrompt(i: ChunkLabelInput): string {
+  const fence = langOf(i.file)?.fence ?? '';
   const fns = i.functions
-    .map((f) => `### ${f.name}\n\`\`\`rust\n${f.source}\n\`\`\``)
+    .map((f) => `### ${f.name}\n\`\`\`${fence}\n${f.source}\n\`\`\``)
     .join('\n\n');
   return (
     `块：${i.chunkName}（文件 ${i.file}，章 ${i.chapterName}）\n` +

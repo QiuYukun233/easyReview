@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeTempRepo, writeRepoFile, commitAll } from './helpers.js';
-import { runMap, resolveLabeler } from '../src/cli.js';
+import { runMap, resolveLabeler, parseArgs } from '../src/cli.js';
 import type { Labeler } from '../src/types.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -85,5 +85,27 @@ describe('resolveLabeler provider routing', () => {
     process.env.ANTHROPIC_API_KEY = 'dummy';
     expect(resolveLabeler({ repo: '', outDir: '', provider: 'claude' })).not.toBeNull();
     expect(resolveLabeler({ repo: '', outDir: '' })).toBeNull(); // 默认 deepseek，无 DEEPSEEK key
+  });
+});
+
+describe('parseArgs --include', () => {
+  it('defaults to undefined, parses comma-separated prefixes', () => {
+    expect(parseArgs(['--repo', 'r']).include).toBeUndefined();
+    expect(parseArgs(['--include', 'app,lib']).include).toEqual(['app', 'lib']);
+    expect(parseArgs(['--include', ' app , ,lib ']).include).toEqual(['app', 'lib']);
+  });
+});
+
+describe('runMap with ruby + include', () => {
+  it('maps only chunks under the included prefix', async () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    writeRepoFile(dir, 'app/models/user.rb', 'def m; 1; end\n');
+    writeRepoFile(dir, 'lib/util.rb', 'def h; 1; end\n');
+    commitAll(dir, 'init');
+
+    await runMap({ repo: dir, outDir: dir, labeler: null, include: ['app'] });
+
+    const tree = JSON.parse(readFileSync(join(dir, 'easyreview.tree.json'), 'utf8'));
+    expect(tree.chunks.map((c: { file: string }) => c.file)).toEqual(['app/models/user.rb']);
   });
 });
