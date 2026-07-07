@@ -18,7 +18,8 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **41 测试全绿**，纯 TDD 完成，三份计划各自评审通过并 ff-merge 到 main。
+- **60 测试全绿**，纯 TDD 完成，四份计划各自评审通过并 ff-merge 到 main（第四份=计划②-LLM 块标签，见下）。
+- `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
 
@@ -29,7 +30,12 @@ npm install                                               # 首次
 # ① 地图：产出 easyreview.tree.json + easyreview.map.md（68 块的风险×贡献度网格）
 npm run map   -- --repo D:/dev/umwelt-bevy --out .
 
-# ② 学习旅程：产出 easyreview.journey.md（进度条 + 下一步卡片，从 filler 小文件起步）+ progress.json
+# ①b LLM 块标签（可选增强）：有 ANTHROPIC_API_KEY 时，map 会额外为每块调 haiku 生成
+#     "职责/为什么现在学它"两句，写 easyreview.labels.json（按块 id+内容 hash 增量缓存）。
+#     无 key / --no-label / 调用失败 → 静默跳过，map 照常产出 tree/map（纯确定性、可离线）。
+#     模型可配：--model <id> 或 ANTHROPIC_MODEL（默认 claude-haiku-4-5，便宜；haiku 不能传 effort）。
+
+# ② 学习旅程：产出 easyreview.journey.md（进度条 + 下一步卡片，有标签则叠加"职责"行+用 LLM 的 whyNow，无则回退静态）+ progress.json
 npm run learn -- --out .
 npm run done  -- <chunkId> --out .                        # 标记某块已理解，进度前进、章级点亮 ✓
 
@@ -57,7 +63,10 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 | `render/map-md.ts` | 风险×贡献度地图（可选 understood 点亮 ✓）|
 | `path/sequence.ts` | 学习路径排序（难度=0.5贡献+0.3风险+0.2size；章内连续；觅食邻居）|
 | `progress/progress.ts` | 进度持久化（understood + verified）|
-| `render/journey-md.ts` | 进度条 + 下一步卡片 |
+| `render/journey-md.ts` | 进度条 + 下一步卡片（可选叠加 LLM 职责/whyNow，无标签回退静态）|
+| `label/cache.ts` | 标签缓存：内容 hash（含函数源码+风险/贡献度档+邻居）、增量筛选、合并、读写 |
+| `label/label.ts` | collectLabelInputs（GradedTree→输入）+ labelChunks（增量 + 无key/失败降级，绝不抛）|
+| `label/claude.ts` | ClaudeLabeler（messages.parse+zod，client 可注入、逐块弹性、并发5）+ makeClaudeLabelerFromEnv |
 | `verify/parse.ts` | 解析 cargo test 输出（test…ok/FAILED + 编译崩）|
 | `verify/cargo.ts` | runCargoTests（可注入 exec，测试用 fake）|
 | `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation |
@@ -67,10 +76,9 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 
 ## 明天可选的下一步（按价值排序，记忆里也有）
 
-1. **计划②-LLM（章/块贴标签）**：目前卡片里的"为什么现在学它"是静态文案；换成 LLM 生成的块标签/职责/学习钩子。
-   - 技术：`@anthropic-ai/sdk` 的 `client.messages.parse()` + `zodOutputFormat`（`@anthropic-ai/sdk/helpers/zod`），默认模型 `claude-opus-4-8`（可配置成 haiku 做廉价批量），`output_config.effort:'low'`，认证 `new Anthropic()`（读 ANTHROPIC_API_KEY / `ant auth login` profile）。
-   - **测试要点**：把 Labeler 抽成接口，测试注入 fake labeler（不打真实 API）；真实 Claude 只在 observe 冒烟。
-   - claude-api 参考已在会话里加载过；铁律仍是"LLM 只贴标签、不发明结构"。
+1. ~~**计划②-LLM（块贴标签）**~~ ✅ 已完成（分支 feat/llm-chunk-labels，见 `docs/superpowers/plans/2026-07-06-llm-chunk-labels.md`）。
+   - 设计/实现要点：Labeler 抽成接口、测试注入 FakeLabeler；ClaudeLabeler 用 `messages.parse()`+`zodOutputFormat`，默认 haiku（**注意 haiku 不接受 `effort`，会 400——所以不传 effort**）；铁律"LLM 只贴标签不发明结构"由 SYSTEM prompt + 只喂既有块数据保证。
+   - **遗留**：真实 Claude 的 observe 冒烟未跑（本机无 ANTHROPIC_API_KEY / ant）。逻辑已由注入 fake client 的单测 + 对真实 SDK 类型定义的核对覆盖；等有 key 时跑一次 `npm run map -- --repo D:/dev/umwelt-bevy --out .` 肉眼评标签质量即可（会真调 haiku 打 68 块，第二次跑因 hash 缓存几乎不再调）。已在真实 umwelt-bevy 上验证过**无 key 降级**端到端可用（tree/map 照常、labels.json 空）。
 2. ~~**verify 扩到 grid_workshop**~~ ✅ 已完成（分支 feat/verify-any-crate，见 `docs/superpowers/plans/2026-07-06-verify-any-crate.md`）。verify 现支持任意 crate（crate 从块推导）；测试名按 `::` 模块分组；首次冷编译打警告；基线编译失败明确报错。勘察发现 grid_workshop 的 201 个测试基本是纯逻辑测试，无需 headless——障碍只是编译重 + 列表长。
 3. **更聪明的突变位点**：`chooseMutation` 现在挑第一个 loc≥3 函数的第一条语句，对 `field.rs` 挑到了 `Field::new` 的构造体返回 → 注释后是**编译崩**（承重信号，但教学不如"某个具体测试变红"丰富）。改进：跳过纯构造体/单一 tail 表达式，偏好逻辑函数体中间的语句 → 得到具体测试失败。
 4. **web viewer**：会点亮的地图 + 进度条的可视化版（当前只有 Markdown）。
