@@ -82,7 +82,7 @@ var RISK_CN = { high: '高', med: '中', low: '低', none: '无' };
 var CONTRIB_CN = { filler: '填充', low: '低', med: '中', high: '高' };
 
 function $(id) { return document.getElementById(id); }
-function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;'); }
 
 // ── 主题:默认跟系统,手动选择存 localStorage ──
 function applyTheme(t) {
