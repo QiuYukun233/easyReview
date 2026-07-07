@@ -39,9 +39,11 @@ npm run map   -- --repo D:/dev/umwelt-bevy --out .
 npm run learn -- --out .
 npm run done  -- <chunkId> --out .                        # 标记某块已理解，进度前进、章级点亮 ✓
 
-# ③ 执行验证（护城河）：仅 chem_field
+# ③ 执行验证（护城河）：任意 crate（crate 从块自己的 chunk.crate 推导，不再只限 chem_field）
 npm run verify -- crates/chem_field/src/core/field.rs --repo D:/dev/umwelt-bevy --out .
-#   → 跑基线 cargo、显示突变位点 + 21 个测试名 + "预测哪些会崩"
+#   → 跑基线 cargo、显示突变位点 + 测试名（按 :: 模块分组）+ "预测哪些会崩"
+#   → grid_workshop 也支持（201 测试、bevy/egui 链接重）；show 会先打一行"首次编译可能数分钟"警告
+#   → 基线编译不过会明确报错（不再误报为"未覆盖"）
 npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测试名> --repo D:/dev/umwelt-bevy --out .
 #   → 注释一行、跑 cargo、算真实爆炸半径、比对你的预测、通过则标 verified（还原原文件）
 ```
@@ -77,7 +79,7 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 1. ~~**计划②-LLM（块贴标签）**~~ ✅ 已完成（分支 feat/llm-chunk-labels，见 `docs/superpowers/plans/2026-07-06-llm-chunk-labels.md`）。
    - 设计/实现要点：Labeler 抽成接口、测试注入 FakeLabeler；ClaudeLabeler 用 `messages.parse()`+`zodOutputFormat`，默认 haiku（**注意 haiku 不接受 `effort`，会 400——所以不传 effort**）；铁律"LLM 只贴标签不发明结构"由 SYSTEM prompt + 只喂既有块数据保证。
    - **遗留**：真实 Claude 的 observe 冒烟未跑（本机无 ANTHROPIC_API_KEY / ant）。逻辑已由注入 fake client 的单测 + 对真实 SDK 类型定义的核对覆盖；等有 key 时跑一次 `npm run map -- --repo D:/dev/umwelt-bevy --out .` 肉眼评标签质量即可（会真调 haiku 打 68 块，第二次跑因 hash 缓存几乎不再调）。已在真实 umwelt-bevy 上验证过**无 key 降级**端到端可用（tree/map 照常、labels.json 空）。
-2. **verify 扩到 grid_workshop**（编译更重，需处理 UI/render 测试）。
+2. ~~**verify 扩到 grid_workshop**~~ ✅ 已完成（分支 feat/verify-any-crate，见 `docs/superpowers/plans/2026-07-06-verify-any-crate.md`）。verify 现支持任意 crate（crate 从块推导）；测试名按 `::` 模块分组；首次冷编译打警告；基线编译失败明确报错。勘察发现 grid_workshop 的 201 个测试基本是纯逻辑测试，无需 headless——障碍只是编译重 + 列表长。
 3. **更聪明的突变位点**：`chooseMutation` 现在挑第一个 loc≥3 函数的第一条语句，对 `field.rs` 挑到了 `Field::new` 的构造体返回 → 注释后是**编译崩**（承重信号，但教学不如"某个具体测试变红"丰富）。改进：跳过纯构造体/单一 tail 表达式，偏好逻辑函数体中间的语句 → 得到具体测试失败。
 4. **web viewer**：会点亮的地图 + 进度条的可视化版（当前只有 Markdown）。
 
