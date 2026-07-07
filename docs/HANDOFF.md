@@ -50,6 +50,11 @@ npm run verify -- crates/chem_field/src/core/field.rs --repo D:/dev/umwelt-bevy 
 #   → 基线编译不过会明确报错（不再误报为"未覆盖"）
 npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测试名> --repo D:/dev/umwelt-bevy --out .
 #   → 注释一行、跑 cargo、算真实爆炸半径、比对你的预测、通过则标 verified（还原原文件）
+
+# ④ web viewer：npm run serve -- --out . [--port 4870] → http://localhost:4870
+#   → 点亮地图（风险×贡献度网格,灰/绿/绿框=verified/黄=下一步）+ 右侧固定"下一步"卡片
+#   → 页面可"标记已理解"（与 CLI done 写同一份 progress.json,同一代码路径）+ 亮暗主题
+#   → 铁律不变:viewer 只消费 outDir 的 JSON,每次 F5 现读磁盘;无 tree.json 启动即报错指引先跑 map
 ```
 
 > 注意：`verify` 会真跑 `cargo test -p chem_field`（热编译 ~35s/次，慢是正常的，不是卡住）。生成物（tree.json / *.md / progress.json / verify-*）都已 gitignore。
@@ -81,7 +86,11 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 | `verify/pick-site.ts` | pickPreferredSite：tree-sitter 挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail |
 | `verify/probe.ts` | 爆炸半径探针（基线→突变→跑→diff→还原）|
 | `verify/judge.ts` | 判定预测 vs 真实爆炸半径 |
-| `cli.ts` / `cli-learn.ts` / `cli-verify.ts` | CLI 命令 map / learn / done / verify |
+| `serve/state.ts` | buildViewerState 纯函数（网格分桶/卡片数据/path 顺序/nextId,复用 buildPath+whyNow）|
+| `serve/done.ts` | 页面"标记已理解"（校验块存在,复用 progress 模块——与 CLI done 同一代码路径）|
+| `serve/page.ts` | 自包含单页（原生 HTML/CSS/JS,零依赖零构建,亮暗主题跟系统+localStorage）|
+| `serve/server.ts` | node:http 路由（GET / / /api/state / POST /api/done,每请求现读,错误兜底 500）|
+| `cli.ts` / `cli-learn.ts` / `cli-verify.ts` / `cli-serve.ts` | CLI 命令 map / learn / done / verify / serve |
 
 ## 明天可选的下一步（按价值排序，记忆里也有）
 
@@ -91,17 +100,13 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
    - **后续（2026-07-07）**：默认 provider 已改为 **DeepSeek**（便宜、OpenAI 兼容；分支 feat/deepseek-labeler，见 `docs/superpowers/plans/2026-07-07-deepseek-labeler.md`）。`--provider claude` 可切回。**真实 DeepSeek 冒烟已通过**（2026-07-07，deepseek-v4-flash 打满 umwelt-bevy 68/68 块、0 丢弃，标签贴合真实代码未发明结构；二跑因 hash 缓存 1.2s 不再调 API）。Claude 侧真实冒烟仍待有 ANTHROPIC_API_KEY 时补。
 2. ~~**verify 扩到 grid_workshop**~~ ✅ 已完成（分支 feat/verify-any-crate，见 `docs/superpowers/plans/2026-07-06-verify-any-crate.md`）。verify 现支持任意 crate（crate 从块推导）；测试名按 `::` 模块分组；首次冷编译打警告；基线编译失败明确报错。勘察发现 grid_workshop 的 201 个测试基本是纯逻辑测试，无需 headless——障碍只是编译重 + 列表长。
 3. ~~**更聪明的突变位点**~~ ✅ 已完成（分支 feat/smarter-mutation-site，见 `docs/superpowers/plans/2026-07-07-smarter-mutation-site.md`）。`chooseMutation` 改成 async 编排器：先用 tree-sitter 挑"好语句"（赋值/复合赋值/裸调用，含 `?`/`.await`/括号包装下钻），注释后大概率某测试变红而非编译崩；挑不到回退现有 regex 扫描（绝不退步）。顺手抽了共享 `getRustParser`。`withMutation` 还原逻辑一行未动。
-4. **web viewer**：会点亮的地图 + 进度条的可视化版（当前只有 Markdown）。
+4. ~~**web viewer**~~ ✅ 已完成（分支 feat/web-viewer，见 `docs/superpowers/plans/2026-07-07-web-viewer.md`）。`npm run serve` 起本地 viewer:点亮地图 + 固定"下一步"卡片 + 页面标记已理解（写同一份 progress.json）+ 亮暗主题。已在真实 umwelt-bevy 上浏览器冒烟通过（68 块渲染/点块切卡/标记联动/主题切换/错误路径,零控制台错误）。
 
 ## 一些工作方式上值得记住的经验
 
 - 全程 subagent 驱动 TDD：每任务派全新 subagent 实现 → 两阶段评审（spec 合规 → 代码质量）→ 修 → 再审。评审 subagent 抓出了多个我计划里的真实 bug（分位公式、`'50%'.includes('0%')` 子串碰撞、done arg 顺序、`blast.actual` 笔误、verified 跨块持久化丢失）——**评审是真在拦 bug，不是走过场**。
 - 每个渲染/验证模块都拿**真实 umwelt-bevy** 观察验证过（不止玩具单测）。
 - **umwelt-bevy 绝不被损坏**：`withMutation` finally 无条件还原 + 施突变前校验目标行，sha256 验证过字节级还原。
-
-## 遗留小事
-
-- `E:\dev\easyReview\easyReview` 是当初为取远程地址建的空 clone 目录，多余，可删（一直是 untracked）。
 
 ## 设计/研究文档（都在仓库里）
 
