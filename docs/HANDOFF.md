@@ -36,6 +36,8 @@ npm run map   -- --repo D:/dev/umwelt-bevy --out .
 #     默认 claude-haiku-4-5；haiku 不能传 effort）。
 #     无对应 key / --no-label / 调用失败 → 静默跳过，map 照常产出 tree/map（纯确定性、可离线）。
 #     模型可配：--model <id>，或 DEEPSEEK_MODEL / ANTHROPIC_MODEL 环境变量（按 provider 生效）。
+#     注意：labels 缓存按"块 id+内容 hash"增量、不区分 provider/model——切换 provider 后想重打标签，
+#     需先删 easyreview.labels.json（否则旧 provider 的标签会因 hash 未变而一直保留）。
 
 # ② 学习旅程：产出 easyreview.journey.md（进度条 + 下一步卡片，有标签则叠加"职责"行+用 LLM 的 whyNow，无则回退静态）+ progress.json
 npm run learn -- --out .

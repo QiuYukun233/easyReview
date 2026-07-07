@@ -16,7 +16,8 @@ describe('runMap', () => {
     commitAll(dir, 'init');
 
     const outDir = dir;
-    await runMap({ repo: dir, outDir });
+    // labeler: null——避免环境里恰好有 DEEPSEEK_API_KEY 时本用例真触网（这里只测 tree/map 产出）
+    await runMap({ repo: dir, outDir, labeler: null });
 
     const tree = JSON.parse(readFileSync(join(outDir, 'easyreview.tree.json'), 'utf8'));
     expect(tree.chunks.length).toBe(2);
