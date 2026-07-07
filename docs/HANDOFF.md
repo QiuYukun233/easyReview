@@ -16,7 +16,7 @@
 ## 现状：v1 全套已完成并在 GitHub main 上
 
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
-- 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）。
+- 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
 - **60 测试全绿**，纯 TDD 完成，四份计划各自评审通过并 ff-merge 到 main（第四份=计划②-LLM 块标签，见下）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
@@ -51,6 +51,12 @@ npm run verify -- crates/chem_field/src/core/field.rs --repo D:/dev/umwelt-bevy 
 npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测试名> --repo D:/dev/umwelt-bevy --out .
 #   → 注释一行、跑 cargo、算真实爆炸半径、比对你的预测、通过则标 verified（还原原文件）
 
+# ⑤ Ruby 仓库（如 chatwoot）：同一套命令 + --include 限目录（outDir 与 umwelt-bevy 隔离）
+npm run map   -- --repo E:/learning/agent-research/repos/chatwoot --include app --out <chatwoot-out>
+npm run learn -- --out <chatwoot-out>
+npm run serve -- --out <chatwoot-out> --port 4872
+#   → 章按 Rails 布局自动切（app:models、app:controllers/...）；verify 碰 Ruby 块会友好拒绝（rspec=子项目②）
+
 # ④ web viewer：npm run serve -- --out . [--port 4870] → http://localhost:4870
 #   → 点亮地图（风险×贡献度网格,灰/绿/绿框=verified/黄=下一步）+ 右侧固定"下一步"卡片
 #   → 页面可"标记已理解"（与 CLI done 写同一份 progress.json,同一代码路径）+ 亮暗主题
@@ -65,8 +71,9 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 |---|---|
 | `types.ts` | 所有共享类型（三层树、Grade、JourneyPath、Progress、验证类型）|
 | `git.ts` | git 封装（listTrackedFiles、logNameOnly）|
-| `extract/rust.ts` | tree-sitter 提取函数叶子（web-tree-sitter 0.22.6，query 只编译一次、tree 每次释放）|
-| `extract/tree.ts` | 组装三层树（章=crate/mod/目录，块=文件，叶=函数）|
+| `extract/lang.ts` | 语言注册表（rust+ruby：扩展名/wasm/叶子query/围栏）+ langOf/inScope（加语言=加一项）|
+| `extract/leaves.ts` | 通用 tree-sitter 叶子提取（query 按语言编译一次、tree 每次释放）|
+| `extract/tree.ts` | 组装三层树（章=crate 或顶层目录/子目录，块=文件，叶=函数/方法；--include 前缀过滤）|
 | `grade/{churn,coupling,ownership,centrality}.ts` | 四个信号（0..1，归一化）|
 | `grade/grade.ts` | 复合两轴 + 分位分桶（min→0/max→1 位置百分位）|
 | `render/map-md.ts` | 风险×贡献度地图（可选 understood 点亮 ✓）|
@@ -81,7 +88,7 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 | `label/deepseek.ts` | DeepSeekLabeler（openai SDK 指向 DeepSeek，json_object+逐块弹性）+ makeDeepSeekLabelerFromEnv，**默认 provider** |
 | `verify/parse.ts` | 解析 cargo test 输出（test…ok/FAILED + 编译崩）|
 | `verify/cargo.ts` | runCargoTests（可注入 exec，测试用 fake）|
-| `extract/parser.ts` | 共享 Rust tree-sitter parser 单例 getRustParser（rust.ts + pick-site.ts 复用）|
+| `extract/parser.ts` | 按语言的 tree-sitter parser 单例 getParser（getRustParser 为薄包装,pick-site.ts 沿用）|
 | `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：优先 tree-sitter 好语句、regex 兜底）|
 | `verify/pick-site.ts` | pickPreferredSite：tree-sitter 挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail |
 | `verify/probe.ts` | 爆炸半径探针（基线→突变→跑→diff→还原）|
@@ -101,6 +108,9 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 2. ~~**verify 扩到 grid_workshop**~~ ✅ 已完成（分支 feat/verify-any-crate，见 `docs/superpowers/plans/2026-07-06-verify-any-crate.md`）。verify 现支持任意 crate（crate 从块推导）；测试名按 `::` 模块分组；首次冷编译打警告；基线编译失败明确报错。勘察发现 grid_workshop 的 201 个测试基本是纯逻辑测试，无需 headless——障碍只是编译重 + 列表长。
 3. ~~**更聪明的突变位点**~~ ✅ 已完成（分支 feat/smarter-mutation-site，见 `docs/superpowers/plans/2026-07-07-smarter-mutation-site.md`）。`chooseMutation` 改成 async 编排器：先用 tree-sitter 挑"好语句"（赋值/复合赋值/裸调用，含 `?`/`.await`/括号包装下钻），注释后大概率某测试变红而非编译崩；挑不到回退现有 regex 扫描（绝不退步）。顺手抽了共享 `getRustParser`。`withMutation` 还原逻辑一行未动。
 4. ~~**web viewer**~~ ✅ 已完成（分支 feat/web-viewer，见 `docs/superpowers/plans/2026-07-07-web-viewer.md`）。`npm run serve` 起本地 viewer:点亮地图 + 固定"下一步"卡片 + 页面标记已理解（写同一份 progress.json）+ 亮暗主题。已在真实 umwelt-bevy 上浏览器冒烟通过（68 块渲染/点块切卡/标记联动/主题切换/错误路径,零控制台错误）。
+5. ~~**Ruby 映射（多语言子项目①，学 chatwoot）**~~ ✅ 已完成（分支 feat/ruby-mapping，见 `docs/superpowers/plans/2026-07-08-ruby-mapping.md`）。语言注册表（`extract/lang.ts`,加语言=加一项）+ 通用叶子提取 + `--include` 目录过滤 + 标签围栏按语言 + verify 非 Rust 友好拒绝。真实 chatwoot 冒烟通过（`--include app` → 738 块/167 章/4780 方法,风险四桶均匀;`conversation.rb` 评 high:high/40 方法,与领域常识吻合;umwelt-bevy 回归 68 块+标签缓存原封不动）。**遗留**:chatwoot 标签还没打（跑冒烟时环境无 DEEPSEEK_API_KEY;设好后重跑 map 即可,738 次调用一次性成本）。
+6. **rspec 突变探针（多语言子项目②）**：verify 对 Ruby 的真实爆炸半径。**前置**:本机无 Ruby/Postgres/Redis,只有 Docker——需先用 Docker 立起 chatwoot 测试环境（首次构建很重）,再勘察 rspec 输出解析/目标 spec 选择（按 Rails 惯例 app/models/user.rb → spec/models/user_spec.rb,不能全量跑）,然后独立 brainstorm→spec→plan。
+7. **Vue/JS 提取**：注册表加项即可（tree-sitter-wasms 已含 vue/javascript/typescript 语法）,但要过规模关（chatwoot .vue 1092 + .js 1022）与"Vue SFC 里 script 块"的提取策略。
 
 ## 一些工作方式上值得记住的经验
 
