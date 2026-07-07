@@ -118,3 +118,14 @@ if (cmd === 'verify') {
       .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
   );
 }
+
+if (cmd === 'serve') {
+  const rest = process.argv.slice(3);
+  const { outDir } = parseArgs(rest);
+  const pi = rest.indexOf('--port');
+  const port = pi >= 0 && rest[pi + 1] ? Number(rest[pi + 1]) : 4870;
+  import('./cli-serve.js').then(({ runServe }) =>
+    runServe({ outDir, port })
+      .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
+  );
+}
