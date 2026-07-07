@@ -28,7 +28,7 @@ export async function runVerifyShow(o: ShowOpts): Promise<void> {
   const crate = chunk.crate;
   const source = readFileSync(join(o.repo, chunk.file), 'utf8');
   const leaves = g.leaves.filter((l) => l.file === chunk.file);
-  const op = chooseMutation(chunk, leaves, source);
+  const op = await chooseMutation(chunk, leaves, source);
   if (!op) throw new Error(`${chunk.file} 找不到可突变的语句行——换个块试试`);
 
   console.error(`⏳ 首次编译 ${crate} 可能要几分钟（bevy/egui 链接很重），属正常、不是卡住。`);

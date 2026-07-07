@@ -1,36 +1,16 @@
-import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
 import Parser from 'web-tree-sitter';
+import { getRustParser } from './parser.js';
 import type { Leaf } from '../types.js';
 
-const require = createRequire(import.meta.url);
-
 const QUERY = '(function_item name: (identifier) @name) @fn';
-
-let parserPromise: Promise<Parser> | null = null;
-let lang: Parser.Language | null = null;
 let query: Parser.Query | null = null;
 
-async function getParser(): Promise<Parser> {
-  if (!parserPromise) {
-    parserPromise = (async () => {
-      await Parser.init();
-      const wasmPath = require.resolve('tree-sitter-wasms/out/tree-sitter-rust.wasm');
-      lang = await Parser.Language.load(readFileSync(wasmPath));
-      query = lang.query(QUERY);
-      const p = new Parser();
-      p.setLanguage(lang);
-      return p;
-    })();
-  }
-  return parserPromise;
-}
-
 export async function extractLeaves(file: string, source: string): Promise<Leaf[]> {
-  const parser = await getParser();
+  const { parser, lang } = await getRustParser();
+  if (!query) query = lang.query(QUERY);
   const tree = parser.parse(source);
   const leaves: Leaf[] = [];
-  for (const m of query!.matches(tree.rootNode)) {
+  for (const m of query.matches(tree.rootNode)) {
     const fnNode = m.captures.find((c) => c.name === 'fn')!.node;
     const nameNode = m.captures.find((c) => c.name === 'name')!.node;
     const startLine = fnNode.startPosition.row + 1;

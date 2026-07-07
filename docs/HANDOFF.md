@@ -69,7 +69,9 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 | `label/claude.ts` | ClaudeLabeler（messages.parse+zod，client 可注入、逐块弹性、并发5）+ makeClaudeLabelerFromEnv |
 | `verify/parse.ts` | 解析 cargo test 输出（test…ok/FAILED + 编译崩）|
 | `verify/cargo.ts` | runCargoTests（可注入 exec，测试用 fake）|
-| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation |
+| `extract/parser.ts` | 共享 Rust tree-sitter parser 单例 getRustParser（rust.ts + pick-site.ts 复用）|
+| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：优先 tree-sitter 好语句、regex 兜底）|
+| `verify/pick-site.ts` | pickPreferredSite：tree-sitter 挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail |
 | `verify/probe.ts` | 爆炸半径探针（基线→突变→跑→diff→还原）|
 | `verify/judge.ts` | 判定预测 vs 真实爆炸半径 |
 | `cli.ts` / `cli-learn.ts` / `cli-verify.ts` | CLI 命令 map / learn / done / verify |
@@ -80,7 +82,7 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
    - 设计/实现要点：Labeler 抽成接口、测试注入 FakeLabeler；ClaudeLabeler 用 `messages.parse()`+`zodOutputFormat`，默认 haiku（**注意 haiku 不接受 `effort`，会 400——所以不传 effort**）；铁律"LLM 只贴标签不发明结构"由 SYSTEM prompt + 只喂既有块数据保证。
    - **遗留**：真实 Claude 的 observe 冒烟未跑（本机无 ANTHROPIC_API_KEY / ant）。逻辑已由注入 fake client 的单测 + 对真实 SDK 类型定义的核对覆盖；等有 key 时跑一次 `npm run map -- --repo D:/dev/umwelt-bevy --out .` 肉眼评标签质量即可（会真调 haiku 打 68 块，第二次跑因 hash 缓存几乎不再调）。已在真实 umwelt-bevy 上验证过**无 key 降级**端到端可用（tree/map 照常、labels.json 空）。
 2. ~~**verify 扩到 grid_workshop**~~ ✅ 已完成（分支 feat/verify-any-crate，见 `docs/superpowers/plans/2026-07-06-verify-any-crate.md`）。verify 现支持任意 crate（crate 从块推导）；测试名按 `::` 模块分组；首次冷编译打警告；基线编译失败明确报错。勘察发现 grid_workshop 的 201 个测试基本是纯逻辑测试，无需 headless——障碍只是编译重 + 列表长。
-3. **更聪明的突变位点**：`chooseMutation` 现在挑第一个 loc≥3 函数的第一条语句，对 `field.rs` 挑到了 `Field::new` 的构造体返回 → 注释后是**编译崩**（承重信号，但教学不如"某个具体测试变红"丰富）。改进：跳过纯构造体/单一 tail 表达式，偏好逻辑函数体中间的语句 → 得到具体测试失败。
+3. ~~**更聪明的突变位点**~~ ✅ 已完成（分支 feat/smarter-mutation-site，见 `docs/superpowers/plans/2026-07-07-smarter-mutation-site.md`）。`chooseMutation` 改成 async 编排器：先用 tree-sitter 挑"好语句"（赋值/复合赋值/裸调用，含 `?`/`.await`/括号包装下钻），注释后大概率某测试变红而非编译崩；挑不到回退现有 regex 扫描（绝不退步）。顺手抽了共享 `getRustParser`。`withMutation` 还原逻辑一行未动。
 4. **web viewer**：会点亮的地图 + 进度条的可视化版（当前只有 Markdown）。
 
 ## 一些工作方式上值得记住的经验
