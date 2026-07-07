@@ -13,7 +13,8 @@
     "map": "tsx src/cli.ts map",
     "learn": "tsx src/cli.ts learn",
     "done": "tsx src/cli.ts done",
-    "verify": "tsx src/cli.ts verify"
+    "verify": "tsx src/cli.ts verify",
+    "serve": "tsx src/cli.ts serve"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
