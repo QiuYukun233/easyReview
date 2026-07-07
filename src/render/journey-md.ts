@@ -1,4 +1,4 @@
-import type { GradedTree, JourneyPath, Progress, Grade, RiskBucket, ContribBucket } from '../types.js';
+import type { GradedTree, JourneyPath, Progress, Grade, RiskBucket, ContribBucket, LabelCache } from '../types.js';
 
 const RISK: Record<RiskBucket, string> = { high: '高', med: '中', low: '低', none: '无' };
 const CONTRIB: Record<ContribBucket, string> = { filler: '填充', low: '低', med: '中', high: '高' };
@@ -15,7 +15,7 @@ function bar(pct: number): string {
   return '█'.repeat(filled) + '░'.repeat(10 - filled);
 }
 
-export function renderJourneyMarkdown(g: GradedTree, path: JourneyPath, progress: Progress): string {
+export function renderJourneyMarkdown(g: GradedTree, path: JourneyPath, progress: Progress, labels?: LabelCache): string {
   const understood = new Set(progress.understood);
   const total = path.steps.length;
   const done = progress.understood.length;
@@ -43,7 +43,10 @@ export function renderJourneyMarkdown(g: GradedTree, path: JourneyPath, progress
   lines.push(`- 所在章：${chapter.name}`);
   lines.push(`- 文件：\`${chunk.file}\``);
   lines.push(`- 风险：${RISK[grade.riskBucket]} · 架构贡献度：${CONTRIB[grade.contribBucket]}`);
-  lines.push(`- 为什么现在学它：${whyNow(grade)}`);
+  const oneLine = (s: string) => s.replace(/\s*\n\s*/g, ' ').trim();
+  const label = labels?.entries[next.chunkId];
+  if (label) lines.push(`- 职责：${oneLine(label.responsibility)}`);
+  lines.push(`- 为什么现在学它：${label ? oneLine(label.whyNow) : whyNow(grade)}`);
   lines.push('');
   lines.push(`### 它有哪些函数（${leaves.length}）`);
   if (leaves.length === 0) lines.push('- （本文件无独立函数，可能是模块声明/重导出）');

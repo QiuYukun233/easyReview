@@ -103,3 +103,34 @@ export interface Verdict {
   falseAlarms: string[];
   passed: boolean;
 }
+
+// ── 计划②-LLM 块标签 ──
+export interface ChunkLabelInput {
+  chunkId: NodeId;
+  chunkName: string;
+  file: string;
+  chapterName: string;
+  riskBucket: RiskBucket;
+  contribBucket: ContribBucket;
+  functions: { name: string; source: string }[];
+  neighbors: string[];       // 同章其它块的名字
+  contentHash: string;       // sha256(函数源码拼接)
+}
+
+export interface ChunkLabel {
+  responsibility: string;    // 一句话职责
+  whyNow: string;            // 为什么现在学它
+}
+
+export interface LabelCacheEntry extends ChunkLabel {
+  contentHash: string;
+}
+
+export interface LabelCache {
+  version: 1;
+  entries: Record<NodeId, LabelCacheEntry>;
+}
+
+export interface Labeler {
+  label(inputs: ChunkLabelInput[]): Promise<Record<NodeId, ChunkLabel>>;
+}

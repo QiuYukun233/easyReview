@@ -6,8 +6,7 @@ import { chooseMutation } from './verify/mutate.js';
 import { probe } from './verify/probe.js';
 import { judge } from './verify/judge.js';
 import { loadProgress, saveProgress, markUnderstood } from './progress/progress.js';
-
-const CRATE = 'chem_field';
+import { groupTestsByModule } from './verify/testlist.js';
 
 function loadTree(outDir: string): GradedTree {
   try { return JSON.parse(readFileSync(join(outDir, 'easyreview.tree.json'), 'utf8')) as GradedTree; }
@@ -16,7 +15,6 @@ function loadTree(outDir: string): GradedTree {
 function findChunk(g: GradedTree, chunkId: string): Chunk {
   const c = g.chunks.find((x) => x.id === chunkId);
   if (!c) throw new Error(`未知 chunk: ${chunkId}`);
-  if (c.crate !== CRATE) throw new Error(`v1 突变探针仅支持 ${CRATE} 的块（该块属于 ${c.crate}）`);
   return c;
 }
 const baselinePath = (o: string) => join(o, 'easyreview.verify-baseline.json');
@@ -27,12 +25,17 @@ export interface ShowOpts { repo: string; outDir: string; chunkId: string; exec?
 export async function runVerifyShow(o: ShowOpts): Promise<void> {
   const g = loadTree(o.outDir);
   const chunk = findChunk(g, o.chunkId);
+  const crate = chunk.crate;
   const source = readFileSync(join(o.repo, chunk.file), 'utf8');
   const leaves = g.leaves.filter((l) => l.file === chunk.file);
   const op = await chooseMutation(chunk, leaves, source);
   if (!op) throw new Error(`${chunk.file} 找不到可突变的语句行——换个块试试`);
 
-  const baseline = await runCargoTests(o.repo, CRATE, o.exec);
+  console.error(`⏳ 首次编译 ${crate} 可能要几分钟（bevy/egui 链接很重），属正常、不是卡住。`);
+  const baseline = await runCargoTests(o.repo, crate, o.exec);
+  if (!baseline.compiled) {
+    throw new Error(`${crate} 的基线 cargo test 无法编译——先修好编译错误再验证这个块。`);
+  }
   const green = baseline.results.filter((r) => r.passed).map((r) => r.name);
   const all = baseline.results.map((r) => r.name);
   writeFileSync(baselinePath(o.outDir), JSON.stringify({ green, all, op }, null, 2));
@@ -49,8 +52,11 @@ export async function runVerifyShow(o: ShowOpts): Promise<void> {
     op.original,
     '```',
     '',
-    `## ${CRATE} 的测试（${all.length}）`,
-    ...all.map((n) => `- \`${n}\``),
+    `## \`${crate}\` 的测试（${all.length}）`,
+    ...groupTestsByModule(all).flatMap((grp) => [
+      `### ${grp.module}`,
+      ...grp.tests.map((n) => `- \`${n}\``),
+    ]),
     '',
     '## 你的任务',
     '读懂这个块后，**预测注释掉那行会让上面哪些测试变红**（爆炸半径）。',
@@ -67,6 +73,7 @@ export interface PredictOpts { repo: string; outDir: string; chunkId: string; pr
 export async function runVerifyPredict(o: PredictOpts): Promise<void> {
   const g = loadTree(o.outDir);
   const chunk = findChunk(g, o.chunkId);
+  const crate = chunk.crate;
   if (!existsSync(baselinePath(o.outDir))) {
     throw new Error(`没有基线——先运行 \`easyreview verify ${chunk.id}\``);
   }
@@ -79,7 +86,7 @@ export async function runVerifyPredict(o: PredictOpts): Promise<void> {
     absFile: join(o.repo, chunk.file),
     op: cached.op,
     baselineGreen: cached.green,
-    runAfter: () => runCargoTests(o.repo, CRATE, o.exec),
+    runAfter: () => runCargoTests(o.repo, crate, o.exec),
   });
 
   // 空爆炸半径（非编译崩）= 该块没被测试覆盖 → 无法用突变探针验证，不能算通过
