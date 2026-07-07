@@ -3,7 +3,7 @@ import type { GradedTree, JourneyPath, Progress, Grade, RiskBucket, ContribBucke
 const RISK: Record<RiskBucket, string> = { high: '高', med: '中', low: '低', none: '无' };
 const CONTRIB: Record<ContribBucket, string> = { filler: '填充', low: '低', med: '中', high: '高' };
 
-function whyNow(grade: Grade): string {
+export function whyNow(grade: Grade): string {
   if (grade.contribBucket === 'filler') return '简单、重复、低风险——用来先熟悉项目的词汇与惯用法。';
   if (grade.riskBucket === 'high') return '高风险核心：改错代价大，是你最终要吃透的部分。';
   if (grade.contribBucket === 'high') return '架构中心：很多东西依赖它，理解它能解锁一大片。';
