@@ -13,7 +13,8 @@ function crateOf(file: string): string {
 }
 
 function dirOf(file: string, crate: string): string {
-  let stripped = file.replace(new RegExp(`^crates/${crate}/`), '');
+  const escaped = crate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // crate 名来自路径段,防正则元字符
+  let stripped = file.replace(new RegExp(`^crates/${escaped}/`), '');
   // 非 crates/ 布局（如 Rails）：顶层目录即 crate，也要剥掉（app/models/user.rb → models/user.rb）
   if (stripped === file && file.startsWith(`${crate}/`)) stripped = file.slice(crate.length + 1);
   const parts = stripped.split('/');

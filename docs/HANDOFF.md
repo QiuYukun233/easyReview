@@ -18,7 +18,7 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **60 测试全绿**，纯 TDD 完成，四份计划各自评审通过并 ff-merge 到 main（第四份=计划②-LLM 块标签，见下）。
+- **113 测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
