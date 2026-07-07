@@ -85,8 +85,9 @@ interface ViewerState {
 - done 成功 → 重新 fetch state 整页重渲染；若标记的是"下一步"，面板自动跳到新的下一步；若跳着标，停留在该块。
 - 卡片里邻居名可点 → 切到那块卡片（觅食动线）。
 - 空态：无标签 → 职责行不显示、whyNow 静态回退；全学完 → "下一步"卡变完成祝贺 + 指引 verify。
+- **暗色主题**：顶栏亮/暗切换按钮；默认跟系统 `prefers-color-scheme`，手动选择存 localStorage（下次打开记住）。配色用 CSS 变量（`:root` / `[data-theme="dark"]` 两套），状态色（灰/绿/黄）两主题下都要可辨。
 
-**不做（YAGNI）**：暗色主题切换（跟系统 `prefers-color-scheme`）、动画、移动端、多仓库切换、SSE 实时推送、页面触发 verify。
+**不做（YAGNI）**：动画、移动端、多仓库切换、SSE 实时推送、页面触发 verify。
 
 ## 错误处理
 
