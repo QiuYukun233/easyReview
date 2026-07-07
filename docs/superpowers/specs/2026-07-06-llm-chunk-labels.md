@@ -1,6 +1,8 @@
 # 设计：计划②-LLM 块标签（增强层）
 
 > 日期：2026-07-06 · 主题：把学习卡片里静态的"块职责/为什么现在学它"换成 LLM 生成的块标签。
+>
+> **2026-07-07 更新**：默认 provider 已由本文的"Claude（默认 haiku / ANTHROPIC_API_KEY）"改为 **deepseek-v4-flash（DEEPSEEK_API_KEY；`--provider claude` 可切回 haiku）**，见 `2026-07-07-deepseek-labeler.md`。下文保留原始设计不改。
 
 ## 目标与铁律
 

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
+    "openai": "^6.45.0",
     "tree-sitter-wasms": "^0.1.11",
     "web-tree-sitter": "^0.22.6",
     "zod": "^4.4.3"

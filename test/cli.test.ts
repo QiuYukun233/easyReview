@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeTempRepo, writeRepoFile, commitAll } from './helpers.js';
-import { runMap } from '../src/cli.js';
+import { runMap, resolveLabeler } from '../src/cli.js';
 import type { Labeler } from '../src/types.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,7 +16,8 @@ describe('runMap', () => {
     commitAll(dir, 'init');
 
     const outDir = dir;
-    await runMap({ repo: dir, outDir });
+    // labeler: null——避免环境里恰好有 DEEPSEEK_API_KEY 时本用例真触网（这里只测 tree/map 产出）
+    await runMap({ repo: dir, outDir, labeler: null });
 
     const tree = JSON.parse(readFileSync(join(outDir, 'easyreview.tree.json'), 'utf8'));
     expect(tree.chunks.length).toBe(2);
@@ -52,5 +53,37 @@ describe('runMap', () => {
     expect(readFileSync(join(dir, 'easyreview.tree.json'), 'utf8')).toContain('grades');
     const labels = JSON.parse(readFileSync(join(dir, 'easyreview.labels.json'), 'utf8'));
     expect(labels.entries).toEqual({});
+  });
+});
+
+describe('resolveLabeler provider routing', () => {
+  const savedD = process.env.DEEPSEEK_API_KEY;
+  const savedA = process.env.ANTHROPIC_API_KEY;
+  afterEach(() => {
+    if (savedD === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = savedD;
+    if (savedA === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = savedA;
+  });
+
+  it('noLabel wins over everything', () => {
+    expect(resolveLabeler({ repo: '', outDir: '', noLabel: true })).toBeNull();
+  });
+
+  it('an injected labeler wins over provider', () => {
+    const fake: Labeler = { label: async () => ({}) };
+    expect(resolveLabeler({ repo: '', outDir: '', labeler: fake })).toBe(fake);
+  });
+
+  it('defaults to deepseek: uses DEEPSEEK_API_KEY; provider=claude ignores it', () => {
+    process.env.DEEPSEEK_API_KEY = 'dummy';
+    delete process.env.ANTHROPIC_API_KEY;
+    expect(resolveLabeler({ repo: '', outDir: '' })).not.toBeNull();               // 默认 deepseek，有 key
+    expect(resolveLabeler({ repo: '', outDir: '', provider: 'claude' })).toBeNull(); // claude，无 ANTHROPIC key
+  });
+
+  it('provider=claude uses ANTHROPIC_API_KEY; default deepseek ignores it', () => {
+    delete process.env.DEEPSEEK_API_KEY;
+    process.env.ANTHROPIC_API_KEY = 'dummy';
+    expect(resolveLabeler({ repo: '', outDir: '', provider: 'claude' })).not.toBeNull();
+    expect(resolveLabeler({ repo: '', outDir: '' })).toBeNull(); // 默认 deepseek，无 DEEPSEEK key
   });
 });

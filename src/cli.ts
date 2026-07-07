@@ -13,19 +13,24 @@ import type { Labeler } from './types.js';
 import { collectLabelInputs, labelChunks } from './label/label.js';
 import { loadLabelCache, saveLabelCache } from './label/cache.js';
 import { makeClaudeLabelerFromEnv } from './label/claude.js';
+import { makeDeepSeekLabelerFromEnv } from './label/deepseek.js';
 
 export interface MapOptions {
   repo: string;
   outDir: string;
-  labeler?: Labeler | null; // 测试注入 fake；显式 null = 不打标签；缺省 = 按 env 决定
+  labeler?: Labeler | null; // 测试注入 fake；显式 null = 不打标签；缺省 = 按 provider+env 决定
   noLabel?: boolean;        // --no-label：即使有 key 也跳过
-  model?: string;           // --model：覆盖默认 claude-haiku-4-5
+  model?: string;           // --model：覆盖默认模型（deepseek-v4-flash / claude-haiku-4-5）
+  provider?: 'deepseek' | 'claude'; // --provider：默认 deepseek
 }
 
-function resolveLabeler(opts: MapOptions): Labeler | null {
+export function resolveLabeler(opts: MapOptions): Labeler | null {
   if (opts.noLabel) return null;
   if (opts.labeler !== undefined) return opts.labeler; // 显式注入（含 null）优先
-  return makeClaudeLabelerFromEnv(opts.model);
+  const provider = opts.provider ?? 'deepseek';
+  return provider === 'claude'
+    ? makeClaudeLabelerFromEnv(opts.model)
+    : makeDeepSeekLabelerFromEnv(opts.model);
 }
 
 export async function runMap(opts: MapOptions): Promise<void> {
@@ -67,6 +72,7 @@ function parseArgs(argv: string[]): MapOptions {
     outDir: get('--out', process.cwd()),
     noLabel: argv.includes('--no-label'),
     model: get('--model', '') || undefined,
+    provider: get('--provider', 'deepseek') === 'claude' ? 'claude' : 'deepseek',
   };
 }
 
