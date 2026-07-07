@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **2026-07-07 更新**：默认 provider 已由本计划的"Claude（默认 haiku / ANTHROPIC_API_KEY）"改为 **deepseek-v4-flash（DEEPSEEK_API_KEY；`--provider claude` 可切回 haiku）**，见 `2026-07-07-deepseek-labeler.md`。下文保留原始计划不改。
+
 **Goal:** 把学习卡片里静态的"块职责/为什么现在学它"换成 LLM 为每个块生成的两句人话，且永远是可选增强——无 key/离线/失败时静默回退现有静态文案，map 依旧纯确定性可跑。
 
 **Architecture:** map 阶段收集每个块的确定性事实 + 函数源码，按"块 id + 内容 hash"增量调用一个可注入的 `Labeler` 接口（生产用 `ClaudeLabeler`，测试用 `FakeLabeler`），结果写 `easyreview.labels.json` 缓存；learn/done 只读缓存喂给卡片渲染。LLM 只贴标签、不发明结构。
