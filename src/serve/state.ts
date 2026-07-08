@@ -8,7 +8,7 @@ export interface ViewerChunk {
   understood: boolean; verified: boolean;
   responsibility: string | null;  // labels.json 没有则 null
   whyNow: string;                 // LLM 的,或 journey-md 静态回退
-  functions: string[];
+  functions: { name: string; startLine: number }[];
   neighbors: NodeId[];
 }
 
@@ -51,7 +51,7 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
       understood: understood.has(c.id), verified: verified.has(c.id),
       responsibility: label ? label.responsibility : null,
       whyNow: label ? label.whyNow : whyNow(grade),
-      functions: g.leaves.filter((l) => l.file === c.id).map((l) => l.name),
+      functions: g.leaves.filter((l) => l.file === c.id).map((l) => ({ name: l.name, startLine: l.startLine })),
       neighbors: neighborsByChunk[c.id] ?? [],
     };
   }

@@ -6,6 +6,7 @@ import { loadLabelCache } from '../label/cache.js';
 import { loadProgress } from '../progress/progress.js';
 import { buildViewerState } from './state.js';
 import { applyDone } from './done.js';
+import { readSource } from './source.js';
 import { renderPage } from './page.js';
 
 /** 没有 tree.json 就没得看——启动即失败,给出明确指引。 */
@@ -56,6 +57,14 @@ async function handle(outDir: string, req: IncomingMessage, res: ServerResponse)
     const labels = loadLabelCache(join(outDir, 'easyreview.labels.json'));
     const progress = loadProgress(join(outDir, 'easyreview.progress.json'));
     sendJson(res, 200, buildViewerState(tree, labels, progress));
+    return;
+  }
+
+  if (req.method === 'GET' && url === '/api/source') {
+    const tree = loadTreeOrThrow(outDir);
+    const chunk = new URL(req.url ?? '/', 'http://localhost').searchParams.get('chunk');
+    const result = readSource(tree, chunk ?? undefined);
+    sendJson(res, result.status, result.body);
     return;
   }
 

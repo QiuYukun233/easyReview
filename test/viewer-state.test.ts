@@ -35,7 +35,7 @@ describe('buildViewerState', () => {
     expect(s.path).toHaveLength(3);
     expect(s.nextId).toBe(s.path[0]);
     expect(s.path[0]).toBe(A);                             // filler 难度最低,先学
-    expect(s.chunks[A].functions).toEqual(['f1', 'f2']);
+    expect(s.chunks[A].functions).toEqual([{ name: 'f1', startLine: 1 }, { name: 'f2', startLine: 5 }]);
     expect(s.chunks[A].neighbors).toEqual([B]);            // 同章邻居
     expect(s.chunks[A].chapterName).toBe('foo::src');
   });

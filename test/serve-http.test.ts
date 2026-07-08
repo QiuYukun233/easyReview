@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
@@ -91,5 +91,22 @@ describe('viewer http server', () => {
     const s = await (await fetch(url + '/api/state')).json();
     expect(s.chunks[A].responsibility).toBeNull();
     expect((await fetch(url + '/api/nope')).status).toBe(404);
+  });
+
+  it('GET /api/source returns highlighted lines; missing param is 400', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'easyrev-http-'));
+    dirs.push(dir);
+    const repo = join(dir, 'repo');
+    mkdirSync(join(repo, 'crates/foo/src'), { recursive: true });
+    writeFileSync(join(repo, 'crates/foo/src/a.rs'), 'fn f1() {}\n');
+    writeFileSync(join(dir, 'easyreview.tree.json'), JSON.stringify({ ...makeViewerTree(), repo }));
+    const url = await listen(dir);
+    const r = await fetch(url + '/api/source?chunk=' + encodeURIComponent(A));
+    expect(r.status).toBe(200);
+    const b = await r.json();
+    expect(b.ok).toBe(true);
+    expect(b.lang).toBe('rust');
+    expect(b.lines[0]).toContain('tok-k');
+    expect((await fetch(url + '/api/source')).status).toBe(400);
   });
 });
