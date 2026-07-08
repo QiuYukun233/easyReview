@@ -15,4 +15,18 @@ describe('renderPage', () => {
     expect(html).toContain('data-theme');           // 暗色主题变量挂载点
     expect(html).not.toContain('src=');             // 零外部资源(自包含)
   });
+
+  it('v2: Tab 双视图 + 树 + 源码抽屉的结构都在', () => {
+    const html = renderPage();
+    expect(html).toContain('id="tab-grid"');
+    expect(html).toContain('id="tab-tree"');
+    expect(html).toContain('id="tree"');
+    expect(html).toContain('id="drawer"');
+    expect(html).toContain('id="drawer-src"');
+    expect(html).toContain('/api/source');
+    expect(html).toContain('tok-k');                // 高亮 token 样式
+    expect(html).toContain('easyreview-view');      // Tab 持久化 key
+    expect(html).toContain('easyreview-collapsed-rows');
+    expect(html).toContain('easyreview-collapsed-dirs');
+  });
 });
