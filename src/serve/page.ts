@@ -190,7 +190,7 @@ function renderPanel() {
   html += '<p><b>为什么现在学它:</b>' + esc(c.whyNow) + '</p>';
   html += '<p><b>函数(' + c.functions.length + ')</b></p>';
   html += c.functions.length
-    ? '<ul>' + c.functions.map(function (f) { return '<li><code>' + esc(f) + '</code></li>'; }).join('') + '</ul>'
+    ? '<ul>' + c.functions.map(function (f) { return '<li><code>' + esc(f.name) + '</code></li>'; }).join('') + '</ul>'
     : '<p class="muted">(本文件无独立函数,可能是模块声明/重导出)</p>';
   html += '<p><b>自测</b>(答得上来再标记)</p><ul class="muted">' +
     '<li>这个块对外做什么?一句话说清职责。</li>' +
