@@ -25,7 +25,7 @@
 
 - **头部**:文件路径 + 风险/贡献徽章 + 职责一行(labels 的 responsibility,有则显示)+「标记已理解」按钮(复用 `POST /api/done`,成功后头部与背后视图即时更新)。
 - **函数列表条**:头部下方横排 chunk 函数名(`state.chunks[].functions`,扩为含 `startLine`,见 §3),点击滚动到对应行并短暂高亮该行;函数多时可展开/收起。
-- **源码区**:等宽 + 行号,只读。轻量自研高亮:按语言(扩展名 → Rust/Ruby)正则 tokenizer 着四类色——关键字/字符串/注释/数字;**先转义 HTML 再包 span**(与 `esc()` 同一条纪律);高亮失败降级为纯文本,绝不因高亮挂掉抽屉。
+- **源码区**:等宽 + 行号,只读。轻量自研高亮:按语言(扩展名 → Rust/Ruby)正则 tokenizer 着四类色——关键字/字符串/注释/数字;**先转义 HTML 再包 span**(与 `esc()` 同一条纪律);高亮失败降级为纯文本,绝不因高亮挂掉抽屉。高亮在**服务端**做(`src/serve/highlight.ts`,行级 tokenizer),理由:vitest 可直接单测、转义纪律收在服务端、前端只负责插入行。
 - **交互**:Esc 或点抽屉外关闭;「收起网格」钮在抽屉左缘;暗色主题跟随现有主题变量。
 - 源码经 `GET /api/source?chunk=<id>` 按需拉取,打开时轻量 loading。
 
@@ -33,7 +33,7 @@
 
 新增只读端点;另有一处 state 扩展(自查发现):`ViewerState.chunks[].functions` 现为 `string[]`(只有名字),函数跳行需要行号——扩为 `{ name: string; startLine: number }[]`(数据源 `Leaf.startLine` 已有,`buildViewerState` 一行改动;前端函数列表渲染同步适配)。其余后端不动。
 
-- `GET /api/source?chunk=<id>` → `{ ok: true, file, lang: 'rust'|'ruby'|null, source }`;按 `tree.repo + '/' + chunk.file` 实时读磁盘(UTF-8)。
+- `GET /api/source?chunk=<id>` → `{ ok: true, file, lang: 'rust'|'ruby'|null, lines: string[] }`(`lines` 为逐行已转义+已高亮的 HTML,见 §2);按 `tree.repo + '/' + chunk.file` 实时读磁盘(UTF-8)。
 - 纯函数 `readSource(tree, chunkId)` 放 `src/serve/source.ts`,形状同 `applyDone`(`{status, body}`),`server.ts` 只做路由接线。
 - 错误:未知 chunk → 400;repo/文件不存在 → 404,报错含人话("仓库路径 `<repo>` 下找不到 `<file>`——repo 挪位置了?用 --repo 重新 map 或把仓库放回原处");读取异常 → 500(现有 handler catch)。
 - 安全:chunk id 必须先在 `tree.chunks` 命中才读盘——白名单,杜绝 `?chunk=../../etc/passwd` 路径穿越。
