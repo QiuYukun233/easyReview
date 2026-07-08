@@ -99,7 +99,7 @@ npm run serve -- --out <chatwoot-out> --port 4872
 | `serve/page.ts` | 自包含单页:Tab 双视图(网格|文件树)+ 源码抽屉 + 折叠|
 | `serve/highlight.ts` | 行级轻量高亮(四类 token,先转义再包 span,超长行降级)|
 | `serve/source.ts` | readSource:chunk 白名单校验→实时读盘→高亮,`{status,body}` 形状同 done|
-| `serve/server.ts` | node:http 路由（GET / / /api/state / POST /api/done,每请求现读,错误兜底 500）|
+| `serve/server.ts` | node:http 路由（GET / / /api/state / /api/source / POST /api/done,每请求现读,错误兜底 500）|
 | `cli.ts` / `cli-learn.ts` / `cli-verify.ts` / `cli-serve.ts` | CLI 命令 map / learn / done / verify / serve |
 
 ## 明天可选的下一步（按价值排序，记忆里也有）
