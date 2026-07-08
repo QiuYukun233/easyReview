@@ -7,6 +7,7 @@ import { probe } from './verify/probe.js';
 import { judge } from './verify/judge.js';
 import { loadProgress, saveProgress, markUnderstood } from './progress/progress.js';
 import { groupTestsByModule } from './verify/testlist.js';
+import { langOf } from './extract/lang.js';
 
 function loadTree(outDir: string): GradedTree {
   try { return JSON.parse(readFileSync(join(outDir, 'easyreview.tree.json'), 'utf8')) as GradedTree; }
@@ -17,6 +18,13 @@ function findChunk(g: GradedTree, chunkId: string): Chunk {
   if (!c) throw new Error(`未知 chunk: ${chunkId}`);
   return c;
 }
+function assertRustChunk(chunk: Chunk): void {
+  if (langOf(chunk.file)?.id !== 'rust') {
+    throw new Error(
+      `verify（突变探针）暂只支持 Rust（cargo）；\`${chunk.file}\` 不是 Rust——rspec 探针在路线图子项目②。`,
+    );
+  }
+}
 const baselinePath = (o: string) => join(o, 'easyreview.verify-baseline.json');
 const verifyMd = (o: string) => join(o, 'easyreview.verify.md');
 const progressPath = (o: string) => join(o, 'easyreview.progress.json');
@@ -25,6 +33,7 @@ export interface ShowOpts { repo: string; outDir: string; chunkId: string; exec?
 export async function runVerifyShow(o: ShowOpts): Promise<void> {
   const g = loadTree(o.outDir);
   const chunk = findChunk(g, o.chunkId);
+  assertRustChunk(chunk);
   const crate = chunk.crate;
   const source = readFileSync(join(o.repo, chunk.file), 'utf8');
   const leaves = g.leaves.filter((l) => l.file === chunk.file);
@@ -73,6 +82,7 @@ export interface PredictOpts { repo: string; outDir: string; chunkId: string; pr
 export async function runVerifyPredict(o: PredictOpts): Promise<void> {
   const g = loadTree(o.outDir);
   const chunk = findChunk(g, o.chunkId);
+  assertRustChunk(chunk);
   const crate = chunk.crate;
   if (!existsSync(baselinePath(o.outDir))) {
     throw new Error(`没有基线——先运行 \`easyreview verify ${chunk.id}\``);

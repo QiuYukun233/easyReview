@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { extractLeaves } from '../src/extract/rust.js';
+import { extractLeaves } from '../src/extract/leaves.js';
+import { RUST } from '../src/extract/lang.js';
 
 const SRC = `
 pub fn top() -> i32 { 1 }
@@ -14,7 +15,7 @@ impl S {
 
 describe('extractLeaves', () => {
   it('finds free functions and impl methods with line spans', async () => {
-    const leaves = await extractLeaves('src/s.rs', SRC);
+    const leaves = await extractLeaves('src/s.rs', SRC, RUST);
     const names = leaves.map((l) => l.name).sort();
     expect(names).toEqual(['method', 'top']);
     const top = leaves.find((l) => l.name === 'top')!;

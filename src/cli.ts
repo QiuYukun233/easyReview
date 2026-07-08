@@ -2,6 +2,7 @@
 import { writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildTree } from './extract/tree.js';
+import { inScope } from './extract/lang.js';
 import { logNameOnly, listTrackedFiles } from './git.js';
 import { relativeChurn } from './grade/churn.js';
 import { changeCoupling } from './grade/coupling.js';
@@ -22,6 +23,7 @@ export interface MapOptions {
   noLabel?: boolean;        // --no-label：即使有 key 也跳过
   model?: string;           // --model：覆盖默认模型（deepseek-v4-flash / claude-haiku-4-5）
   provider?: 'deepseek' | 'claude'; // --provider：默认 deepseek
+  include?: string[];       // --include：目录前缀过滤（如 app,lib），缺省不过滤
 }
 
 export function resolveLabeler(opts: MapOptions): Labeler | null {
@@ -35,11 +37,11 @@ export function resolveLabeler(opts: MapOptions): Labeler | null {
 
 export async function runMap(opts: MapOptions): Promise<void> {
   const { repo, outDir } = opts;
-  const tree = await buildTree(repo);
+  const tree = await buildTree(repo, { include: opts.include });
   const log = logNameOnly(repo);
 
   const sources: Record<string, string> = {};
-  for (const f of listTrackedFiles(repo).filter((x) => x.endsWith('.rs'))) {
+  for (const f of listTrackedFiles(repo).filter((x) => inScope(x, opts.include))) {
     sources[f] = readFileSync(join(repo, f), 'utf8');
   }
 
@@ -62,17 +64,19 @@ export async function runMap(opts: MapOptions): Promise<void> {
   saveLabelCache(labelPath, updated);
 }
 
-function parseArgs(argv: string[]): MapOptions {
+export function parseArgs(argv: string[]): MapOptions {
   const get = (flag: string, def: string) => {
     const i = argv.indexOf(flag);
     return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
   };
+  const inc = get('--include', '');
   return {
     repo: get('--repo', process.cwd()),
     outDir: get('--out', process.cwd()),
     noLabel: argv.includes('--no-label'),
     model: get('--model', '') || undefined,
     provider: get('--provider', 'deepseek') === 'claude' ? 'claude' : 'deepseek',
+    include: inc ? inc.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
   };
 }
 
