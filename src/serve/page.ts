@@ -20,6 +20,7 @@ export function renderPage(): string {
   --border: #383c45; --dot: #4a4e58; --lit: #3fbf78; --next: #e8b542;
   --accent: #6ea1ff; --danger: #e06050;
   --tok-k: #c678dd; --tok-s: #98c379; --tok-n: #d19a66;
+  --risk-high: #e06560; --risk-med: #eab04a; --risk-low: #d8ca52;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -27,6 +28,7 @@ export function renderPage(): string {
     --border: #383c45; --dot: #4a4e58; --lit: #3fbf78; --next: #e8b542;
     --accent: #6ea1ff; --danger: #e06050;
     --tok-k: #c678dd; --tok-s: #98c379; --tok-n: #d19a66;
+    --risk-high: #e06560; --risk-med: #eab04a; --risk-low: #d8ca52;
   }
 }
 * { box-sizing: border-box; }
@@ -132,6 +134,8 @@ var collapsedRows = loadSet('easyreview-collapsed-rows');
 var collapsedDirs = loadSet('easyreview-collapsed-dirs');
 var drawerId = null;
 var drawerFull = false;
+var fnsOpen = false; // 函数条展开态,随抽屉走
+var pendingJump = null; // 源码未加载时点了函数 chip,加载完再跳
 var srcCache = {}; // chunkId → /api/source body(本页生命周期内缓存)
 
 var RISK_CN = { high: '高', med: '中', low: '低', none: '无' };
@@ -329,6 +333,8 @@ function renderTree() {
 // ── 源码抽屉 ──
 function openDrawer(id) {
   drawerId = id;
+  fnsOpen = false;
+  pendingJump = null;
   $('drawer').hidden = false;
   $('backdrop').hidden = false;
   renderDrawerHead();
@@ -352,6 +358,7 @@ function openDrawer(id) {
 function closeDrawer() {
   drawerId = null;
   drawerFull = false;
+  fnsOpen = false;
   $('drawer').classList.remove('full');
   $('drawer').hidden = true;
   $('backdrop').hidden = true;
@@ -391,9 +398,9 @@ function renderDrawerFns() {
     html += '<button class="fn-chip" data-line="' + f.startLine + '">' + esc(f.name) + ':' + f.startLine + '</button>';
   }
   box.innerHTML = html;
-  box.className = many ? '' : 'open';
+  box.className = (fnsOpen || !many) ? 'open' : '';
   var t = $('fns-toggle');
-  if (t) t.addEventListener('click', function () { box.classList.toggle('open'); });
+  if (t) t.addEventListener('click', function () { fnsOpen = !fnsOpen; box.classList.toggle('open', fnsOpen); });
   var chips = box.querySelectorAll('.fn-chip[data-line]');
   for (var j = 0; j < chips.length; j++) {
     chips[j].addEventListener('click', function (ev) {
@@ -409,11 +416,13 @@ function renderSource(body) {
     html += '<div class="src-line" id="L' + (i + 1) + '"><span class="ln">' + (i + 1) + '</span><span class="lc">' + body.lines[i] + '</span></div>';
   }
   $('drawer-src').innerHTML = html;
+  if (pendingJump) { var j = pendingJump; pendingJump = null; jumpTo(j); }
 }
 
 function jumpTo(line) {
   var el = document.getElementById('L' + line);
-  if (!el) return;
+  if (!el) { pendingJump = line; return; }
+  pendingJump = null;
   el.scrollIntoView({ block: 'center' });
   el.classList.add('flash');
   setTimeout(function () { el.classList.remove('flash'); }, 1200);
