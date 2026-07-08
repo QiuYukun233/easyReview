@@ -27,4 +27,13 @@ describe('highlightLines', () => {
   it('lang=null → 纯转义,无 span', () => {
     expect(highlightLines('a < b\nc & d', null)).toEqual(['a &lt; b', 'c &amp; d']);
   });
+
+  it('超长行(>2000)直接纯转义,不进 tokenizer(防病态正则回溯)', () => {
+    const evil = ('"' + '\\').repeat(3000); // 引号+奇数反斜杠的病态构造,长度 6000 > 上限
+    const start = Date.now();
+    const [out] = highlightLines(evil, 'rust');
+    expect(Date.now() - start).toBeLessThan(500);
+    expect(out).not.toContain('<span');
+    expect(out).toContain('&quot;');
+  });
 });

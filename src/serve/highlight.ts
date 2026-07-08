@@ -30,6 +30,7 @@ export function highlightLines(source: string, langId: LangId | null): string[] 
 }
 
 function highlightLine(line: string, langId: LangId): string {
+  if (line.length > 2000) return escapeHtml(line); // 病态长行(压缩/生成文件)不值得着色,防正则 O(n²) 拖死事件循环
   const re = TOKEN_RE[langId];
   const kw = KEYWORDS[langId];
   re.lastIndex = 0;
