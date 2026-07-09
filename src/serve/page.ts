@@ -73,7 +73,7 @@ main { display: flex; gap: 16px; padding: 16px 20px; align-items: flex-start; }
 .card h2 { margin: 0 0 6px; font-size: 15px; }
 .card .meta, .card .muted, .muted { color: var(--muted); font-size: 13px; }
 .card ul { margin: 6px 0; padding-left: 20px; }
-.card .nb { color: var(--accent); cursor: pointer; text-decoration: underline; }
+.nb { color: var(--accent); cursor: pointer; text-decoration: underline; }
 .back { display: inline-block; margin-bottom: 8px; color: var(--accent); cursor: pointer; }
 button.done-btn { margin-top: 10px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--lit); background: none; color: var(--lit); cursor: pointer; font-size: 14px; }
 button.done-btn:disabled { border-color: var(--border); color: var(--muted); cursor: default; }
@@ -427,7 +427,7 @@ function renderDrawerFns() {
 function loadInterp(id) {
   if (!interpOn) return;
   var cur = interp[id];
-  if (cur && (cur.st === 'ok' || cur.st === 'loading')) { renderInterp(); return; }
+  if (cur) { renderInterp(); return; } // ok/loading/err/nokey 都缓存;重试按钮会先 delete 再进来
   interp[id] = { st: 'loading' };
   renderInterp();
   fetch('/api/interpret?chunk=' + encodeURIComponent(id))
