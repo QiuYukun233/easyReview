@@ -1,12 +1,14 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { GradedTree } from '../types.js';
+import type { GradedTree, Interpreter } from '../types.js';
 import { loadLabelCache } from '../label/cache.js';
 import { loadProgress } from '../progress/progress.js';
+import { makeInterpreterFromEnv } from '../interpret/deepseek.js';
 import { buildViewerState } from './state.js';
 import { applyDone } from './done.js';
 import { readSource } from './source.js';
+import { applyInterpret, type InterpretResult } from './interpret.js';
 import { renderPage } from './page.js';
 
 /** 没有 tree.json 就没得看——启动即失败,给出明确指引。 */
@@ -33,16 +35,29 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-export function createViewerServer(outDir: string): Server {
+export interface ViewerServerOptions {
+  /** 缺省 = 按 env 解析(makeInterpreterFromEnv);显式 null = 无解读(503)。测试必须显式注入。 */
+  interpreter?: Interpreter | null;
+}
+
+export function createViewerServer(outDir: string, opts: ViewerServerOptions = {}): Server {
   loadTreeOrThrow(outDir); // 启动校验
+  const interpreter = opts.interpreter !== undefined ? opts.interpreter : makeInterpreterFromEnv();
+  const inflight = new Map<string, Promise<InterpretResult>>();
   return createServer((req, res) => {
-    handle(outDir, req, res).catch((e) => {
+    handle(outDir, interpreter, inflight, req, res).catch((e) => {
       sendJson(res, 500, { ok: false, error: String(e) });
     });
   });
 }
 
-async function handle(outDir: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handle(
+  outDir: string,
+  interpreter: Interpreter | null,
+  inflight: Map<string, Promise<InterpretResult>>,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
   const url = (req.url ?? '/').split('?')[0];
 
   if (req.method === 'GET' && url === '/') {
@@ -64,6 +79,18 @@ async function handle(outDir: string, req: IncomingMessage, res: ServerResponse)
     const tree = loadTreeOrThrow(outDir);
     const chunk = new URL(req.url ?? '/', 'http://localhost').searchParams.get('chunk');
     const result = readSource(tree, chunk ?? undefined);
+    sendJson(res, result.status, result.body);
+    return;
+  }
+
+  if (req.method === 'GET' && url === '/api/interpret') {
+    if (!interpreter) {
+      sendJson(res, 503, { ok: false, error: '未配置 DEEPSEEK_API_KEY——解读不可用' });
+      return;
+    }
+    const tree = loadTreeOrThrow(outDir);
+    const chunk = new URL(req.url ?? '/', 'http://localhost').searchParams.get('chunk');
+    const result = await applyInterpret(tree, outDir, chunk ?? undefined, interpreter, inflight);
     sendJson(res, result.status, result.body);
     return;
   }

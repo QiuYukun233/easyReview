@@ -109,4 +109,31 @@ describe('viewer http server', () => {
     expect(b.lines[0]).toContain('tok-k');
     expect((await fetch(url + '/api/source')).status).toBe(400);
   });
+
+  it('GET /api/interpret: 注入 fake → 200 落盘;interpreter null → 503;无参 → 400', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'easyrev-http-'));
+    dirs.push(dir);
+    const repo = join(dir, 'repo');
+    mkdirSync(join(repo, 'crates/foo/src'), { recursive: true });
+    writeFileSync(join(repo, 'crates/foo/src/a.rs'), 'fn f1() {}\n');
+    writeFileSync(join(dir, 'easyreview.tree.json'), JSON.stringify({ ...makeViewerTree(), repo }));
+    const fake = { interpret: async () => ({ overview: 'o', dataFlow: 'd', calls: 'c', functions: [] }) };
+    const server = createViewerServer(dir, { interpreter: fake });
+    servers.push(server);
+    await new Promise<void>((res) => server.listen(0, '127.0.0.1', res));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const r = await fetch(url + '/api/interpret?chunk=' + encodeURIComponent(A));
+    expect(r.status).toBe(200);
+    const b = await r.json();
+    expect(b.ok).toBe(true);
+    expect(b.interpretation.overview).toBe('o');
+    expect(JSON.parse(readFileSync(join(dir, 'easyreview.interpret.json'), 'utf8')).entries[A].overview).toBe('o');
+    expect((await fetch(url + '/api/interpret')).status).toBe(400);
+
+    const server503 = createViewerServer(dir, { interpreter: null });
+    servers.push(server503);
+    await new Promise<void>((res) => server503.listen(0, '127.0.0.1', res));
+    const url2 = `http://127.0.0.1:${(server503.address() as AddressInfo).port}`;
+    expect((await fetch(url2 + '/api/interpret?chunk=' + encodeURIComponent(A))).status).toBe(503);
+  });
 });
