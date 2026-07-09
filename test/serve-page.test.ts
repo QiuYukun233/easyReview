@@ -29,4 +29,14 @@ describe('renderPage', () => {
     expect(html).toContain('easyreview-collapsed-rows');
     expect(html).toContain('easyreview-collapsed-dirs');
   });
+
+  it('B: AI 解读——开关/面板/端点/持久化键/加载态都在', () => {
+    const html = renderPage();
+    expect(html).toContain('id="interp-toggle"');
+    expect(html).toContain('id="interp"');
+    expect(html).toContain('/api/interpret');
+    expect(html).toContain('easyreview-interpret-collapsed');
+    expect(html).toContain('解读生成中');
+    expect(html).not.toContain('src=');
+  });
 });

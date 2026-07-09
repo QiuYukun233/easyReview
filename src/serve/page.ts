@@ -42,7 +42,8 @@ header h1 { font-size: 16px; margin: 0; }
 #progress-bar { flex: 1; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; max-width: 420px; }
 #progress-fill { height: 100%; width: 0; background: var(--lit); transition: width .2s; }
 #progress-text { color: var(--muted); white-space: nowrap; }
-#theme-toggle { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+#theme-toggle, #interp-toggle { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+#interp-toggle.off { color: var(--muted); border-style: dashed; }
 #error-banner { background: var(--danger); color: #fff; padding: 6px 20px; }
 main { display: flex; gap: 16px; padding: 16px 20px; align-items: flex-start; }
 #map { flex: 3; min-width: 0; }
@@ -88,6 +89,11 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
 #drawer-fns { padding: 6px 16px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px; max-height: 40px; overflow: hidden; }
 #drawer-fns.open { max-height: 180px; overflow: auto; }
 .fn-chip { border: 1px solid var(--border); border-radius: 12px; padding: 1px 8px; font: 12px ui-monospace, monospace; cursor: pointer; color: var(--accent); background: none; }
+#interp { border-bottom: 1px solid var(--border); background: rgba(110,161,255,.08); padding: 8px 16px; font-size: 13px; max-height: 45vh; overflow: auto; }
+#interp .interp-head { cursor: pointer; user-select: none; color: var(--accent); font-weight: 600; }
+#interp .interp-body p { margin: 6px 0; }
+#interp .fn-gist { margin: 2px 0; }
+#interp .fn-gist code { color: var(--accent); cursor: pointer; }
 #drawer-src { flex: 1; overflow: auto; font: 12px/1.55 ui-monospace, monospace; padding: 8px 0; }
 .src-line { display: flex; }
 .src-line .ln { flex: none; width: 52px; text-align: right; padding-right: 12px; color: var(--muted); user-select: none; }
@@ -108,6 +114,7 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
     <div id="progress-bar"><div id="progress-fill"></div></div>
     <span id="progress-text"></span>
   </div>
+  <button id="interp-toggle" title="AI 解读开/关"></button>
   <button id="theme-toggle" title="亮/暗切换">🌓</button>
 </header>
 <div id="error-banner" hidden></div>
@@ -123,6 +130,7 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
 <aside id="drawer" hidden>
   <div id="drawer-head"></div>
   <div id="drawer-fns"></div>
+  <div id="interp" hidden></div>
   <div id="drawer-src"></div>
 </aside>
 <script>
@@ -137,6 +145,9 @@ var drawerFull = false;
 var fnsOpen = false; // 函数条展开态,随抽屉走
 var pendingJump = null; // 源码未加载时点了函数 chip,加载完再跳
 var srcCache = {}; // chunkId → /api/source body(本页生命周期内缓存)
+var interpOn = localStorage.getItem('easyreview-interpret') !== 'off'; // 默认开
+var interpCollapsed = localStorage.getItem('easyreview-interpret-collapsed') === 'yes';
+var interp = {}; // chunkId → { st: 'loading'|'ok'|'nokey'|'err', data?, msg? }(本页生命周期缓存)
 
 var RISK_CN = { high: '高', med: '中', low: '低', none: '无' };
 var CONTRIB_CN = { filler: '填充', low: '低', med: '中', high: '高' };
@@ -339,6 +350,8 @@ function openDrawer(id) {
   $('backdrop').hidden = false;
   renderDrawerHead();
   renderDrawerFns();
+  renderInterp();
+  loadInterp(id);
   var cached = srcCache[id];
   if (cached) { renderSource(cached); return; }
   $('drawer-src').innerHTML = '<p class="muted" style="padding:0 16px">加载源码…</p>';
@@ -361,6 +374,7 @@ function closeDrawer() {
   fnsOpen = false;
   $('drawer').classList.remove('full');
   $('drawer').hidden = true;
+  $('interp').hidden = true;
   $('backdrop').hidden = true;
 }
 
@@ -406,6 +420,70 @@ function renderDrawerFns() {
     chips[j].addEventListener('click', function (ev) {
       jumpTo(parseInt(ev.currentTarget.getAttribute('data-line'), 10));
     });
+  }
+}
+
+// ── AI 解读面板(默认开可关;文本全部过 esc 再进 DOM) ──
+function loadInterp(id) {
+  if (!interpOn) return;
+  var cur = interp[id];
+  if (cur && (cur.st === 'ok' || cur.st === 'loading')) { renderInterp(); return; }
+  interp[id] = { st: 'loading' };
+  renderInterp();
+  fetch('/api/interpret?chunk=' + encodeURIComponent(id))
+    .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
+    .then(function (res) {
+      if (res.body.ok) interp[id] = { st: 'ok', data: res.body.interpretation };
+      else interp[id] = { st: res.status === 503 ? 'nokey' : 'err', msg: res.body.error || ('HTTP ' + res.status) };
+      if (drawerId === id) renderInterp();
+    })
+    .catch(function (e) {
+      interp[id] = { st: 'err', msg: e.message };
+      if (drawerId === id) renderInterp();
+    });
+}
+
+function fnLine(name) {
+  var c = state.chunks[drawerId];
+  for (var i = 0; i < c.functions.length; i++) if (c.functions[i].name === name) return c.functions[i].startLine;
+  return 0;
+}
+
+function renderInterp() {
+  var box = $('interp');
+  if (!interpOn || !drawerId) { box.hidden = true; return; }
+  box.hidden = false;
+  var it = interp[drawerId];
+  var html = '<div class="interp-head" id="interp-head">' + (interpCollapsed ? '▸' : '▾') + ' AI 解读</div>';
+  if (!interpCollapsed) {
+    if (!it || it.st === 'loading') html += '<div class="interp-body muted">解读生成中…(首次约十几秒)</div>';
+    else if (it.st === 'nokey') html += '<div class="interp-body muted">' + esc(it.msg) + '</div>';
+    else if (it.st === 'err') html += '<div class="interp-body"><span class="muted">' + esc(it.msg) + '</span> <span class="nb" id="interp-retry">重试</span></div>';
+    else {
+      var d = it.data;
+      html += '<div class="interp-body">';
+      html += '<p><b>职责:</b>' + esc(d.overview) + '</p>';
+      html += '<p><b>数据流:</b>' + esc(d.dataFlow) + '</p>';
+      html += '<p><b>调用关系:</b>' + esc(d.calls) + '</p>';
+      for (var i = 0; i < d.functions.length; i++) {
+        var f = d.functions[i];
+        var ln = fnLine(f.name);
+        html += '<div class="fn-gist"><code' + (ln ? ' data-line="' + ln + '"' : '') + '>' + esc(f.name) + '</code> ' + esc(f.gist) + '</div>';
+      }
+      html += '</div>';
+    }
+  }
+  box.innerHTML = html;
+  $('interp-head').addEventListener('click', function () {
+    interpCollapsed = !interpCollapsed;
+    localStorage.setItem('easyreview-interpret-collapsed', interpCollapsed ? 'yes' : 'no');
+    renderInterp();
+  });
+  var retry = $('interp-retry');
+  if (retry) retry.addEventListener('click', function () { delete interp[drawerId]; loadInterp(drawerId); });
+  var codes = box.querySelectorAll('code[data-line]');
+  for (var j = 0; j < codes.length; j++) {
+    codes[j].addEventListener('click', function (ev) { jumpTo(parseInt(ev.currentTarget.getAttribute('data-line'), 10)); });
   }
 }
 
@@ -482,6 +560,18 @@ function renderPanel() {
 // ── 全局交互 ──
 $('tab-grid').addEventListener('click', function () { view = 'grid'; localStorage.setItem('easyreview-view', view); render(); });
 $('tab-tree').addEventListener('click', function () { view = 'tree'; localStorage.setItem('easyreview-view', view); render(); });
+function renderInterpToggle() {
+  $('interp-toggle').className = interpOn ? '' : 'off';
+  $('interp-toggle').textContent = interpOn ? '✨ 解读:开' : '✨ 解读:关';
+}
+$('interp-toggle').addEventListener('click', function () {
+  interpOn = !interpOn;
+  localStorage.setItem('easyreview-interpret', interpOn ? 'on' : 'off');
+  renderInterpToggle();
+  if (interpOn && drawerId) loadInterp(drawerId);
+  renderInterp();
+});
+renderInterpToggle();
 $('backdrop').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && drawerId) closeDrawer(); });
 
