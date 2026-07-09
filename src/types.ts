@@ -134,3 +134,39 @@ export interface LabelCache {
 export interface Labeler {
   label(inputs: ChunkLabelInput[]): Promise<Record<NodeId, ChunkLabel>>;
 }
+
+// ── 子项目B-AI 解读层 ──
+export interface InterpretInput {
+  chunkId: NodeId;
+  chunkName: string;
+  file: string;
+  chapterName: string;
+  riskBucket: RiskBucket;
+  contribBucket: ContribBucket;
+  signals: Signals;
+  functions: { name: string; startLine: number }[];
+  neighbors: string[];        // 同章其它块的名字
+  source: string;             // 整文件源码(实时读盘,超长会被截断)
+  truncated: boolean;
+  contentHash: string;
+}
+
+export interface ChunkInterpretation {
+  overview: string;           // 职责展开,3-5 句
+  dataFlow: string;           // 数据怎么进、怎么变、怎么出
+  calls: string;              // 调用关系:文件内可见的 + 事实里给的,跨文件不臆测
+  functions: { name: string; gist: string }[]; // 逐函数一句话
+}
+
+export interface InterpretCacheEntry extends ChunkInterpretation {
+  contentHash: string;
+}
+
+export interface InterpretCache {
+  version: 1;
+  entries: Record<NodeId, InterpretCacheEntry>;
+}
+
+export interface Interpreter {
+  interpret(input: InterpretInput): Promise<ChunkInterpretation | null>;
+}
