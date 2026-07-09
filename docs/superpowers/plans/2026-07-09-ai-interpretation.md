@@ -622,13 +622,28 @@ git commit -m "feat(serve): /api/interpret 结果函数——白名单+增量缓
     expect(JSON.parse(readFileSync(join(dir, 'easyreview.interpret.json'), 'utf8')).entries[A].overview).toBe('o');
     expect((await fetch(url + '/api/interpret')).status).toBe(400);
 
-    const server503 = createViewerServer(dir, { interpreter: null });
+    // 无 key + 已有缓存 → 仍然能看(缓存命中优先于 503,这是设计行为)
+    const serverNoKey = createViewerServer(dir, { interpreter: null });
+    servers.push(serverNoKey);
+    await new Promise<void>((res) => serverNoKey.listen(0, '127.0.0.1', res));
+    const urlNoKey = `http://127.0.0.1:${(serverNoKey.address() as AddressInfo).port}`;
+    const rc = await fetch(urlNoKey + '/api/interpret?chunk=' + encodeURIComponent(A));
+    expect(rc.status).toBe(200);
+    expect((await rc.json()).cached).toBe(true);
+
+    // 无 key + 无缓存 → 503
+    const dir2 = mkdtempSync(join(tmpdir(), 'easyrev-http-'));
+    dirs.push(dir2);
+    writeFileSync(join(dir2, 'easyreview.tree.json'), JSON.stringify({ ...makeViewerTree(), repo }));
+    const server503 = createViewerServer(dir2, { interpreter: null });
     servers.push(server503);
     await new Promise<void>((res) => server503.listen(0, '127.0.0.1', res));
     const url2 = `http://127.0.0.1:${(server503.address() as AddressInfo).port}`;
     expect((await fetch(url2 + '/api/interpret?chunk=' + encodeURIComponent(A))).status).toBe(503);
   });
 ```
+
+> 修订(执行中发现):原计划此测试让 server503 复用暖缓存 dir 并期望 503,与「缓存命中优先于 503」的设计矛盾——已改为上面版本(无 key 有缓存 → 200 cached:true;无 key 无缓存 → 503)。
 
 **注意:测试必须显式注入 `{ interpreter: fake }` 或 `{ interpreter: null }`——本机 env 里有真 key,靠缺省解析会打到真 API。**
 
