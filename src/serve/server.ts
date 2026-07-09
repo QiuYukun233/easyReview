@@ -84,10 +84,6 @@ async function handle(
   }
 
   if (req.method === 'GET' && url === '/api/interpret') {
-    if (!interpreter) {
-      sendJson(res, 503, { ok: false, error: '未配置 DEEPSEEK_API_KEY——解读不可用' });
-      return;
-    }
     const tree = loadTreeOrThrow(outDir);
     const chunk = new URL(req.url ?? '/', 'http://localhost').searchParams.get('chunk');
     const result = await applyInterpret(tree, outDir, chunk ?? undefined, interpreter, inflight);
