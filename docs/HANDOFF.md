@@ -18,7 +18,7 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **42 文件 / 123 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
+- **45 文件 / 141 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
@@ -61,7 +61,7 @@ npm run serve -- --out <chatwoot-out> --port 4872
 #   → 点亮地图（风险×贡献度网格,灰/绿/绿框=verified/黄=下一步）+ 右侧固定"下一步"卡片
 #   → 页面可"标记已理解"（与 CLI done 写同一份 progress.json,同一代码路径）+ 亮暗主题
 #   → 铁律不变:viewer 只消费 outDir 的 JSON,每次 F5 现读磁盘;无 tree.json 启动即报错指引先跑 map
-# viewer v2(2026-07-09):顶部「网格|文件树」Tab 切换;树视图按原目录结构展示、风险色点 + ✓/✓✓ 进度、目录可折叠;点卡片/文件从右侧滑出**源码抽屉**(只读、行号、轻量高亮、函数名点击跳行),「收起网格」可让源码占满全宽;网格每行(风险档)行头可点击折叠。Tab/折叠状态存 localStorage。源码经 `GET /api/source?chunk=<id>` 从 tree.json 记录的 repo 路径**实时读盘**——repo 挪走会 404 并提示用 `--repo` 重新 map。高亮在服务端做(`src/serve/highlight.ts`),行级 tokenizer(超长行>2000 字符降级纯转义防病态正则),失败降级纯文本。
+# viewer v2(2026-07-09):顶部「网格|文件树」Tab 切换;树视图按原目录结构展示、风险色点 + ✓/✓✓ 进度、目录可折叠;点卡片/文件从右侧滑出**源码抽屉**(只读、行号、轻量高亮、函数名点击跳行),「收起网格」可让源码占满全宽;网格每行(风险档)行头可点击折叠。Tab/折叠状态存 localStorage。源码经 `GET /api/source?chunk=<id>` 从 tree.json 记录的 repo 路径**实时读盘**——repo 挪走会 404 并提示用 `--repo` 重新 map。高亮在服务端做(`src/serve/highlight.ts`),行级 tokenizer(超长行>2000 字符降级纯转义防病态正则),失败降级纯文本。抽屉里还有 **AI 解读面板**:`GET /api/interpret` 按需生成(命中缓存立即返回,未命中同步调 DeepSeek 并落盘),结果按块存 `easyreview.interpret.json` 增量缓存;顶栏「✨ 解读」开关默认开;无 DEEPSEEK_API_KEY 时面板灰字降级,不影响其余功能。
 ```
 
 > 注意：`verify` 会真跑 `cargo test -p chem_field`（热编译 ~35s/次，慢是正常的，不是卡住）。生成物（tree.json / *.md / progress.json / verify-*）都已 gitignore。
@@ -94,12 +94,17 @@ npm run serve -- --out <chatwoot-out> --port 4872
 | `verify/pick-site.ts` | pickPreferredSite：tree-sitter 挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail |
 | `verify/probe.ts` | 爆炸半径探针（基线→突变→跑→diff→还原）|
 | `verify/judge.ts` | 判定预测 vs 真实爆炸半径 |
+| `interpret/input.ts` | 解读喂料:整文件源码+确定性事实,contentHash(含 PROMPT_VERSION)|
+| `interpret/prompt.ts` | 解读铁律 prompt + InterpretSchema |
+| `interpret/deepseek.ts` | DeepSeek 单块解读客户端(无 key → null;函数名单代码侧过滤)|
+| `interpret/cache.ts` | easyreview.interpret.json 读写 |
 | `serve/state.ts` | buildViewerState 纯函数（网格分桶/卡片数据/path 顺序/nextId,复用 buildPath+whyNow）|
 | `serve/done.ts` | 页面"标记已理解"（校验块存在,复用 progress 模块——与 CLI done 同一代码路径）|
-| `serve/page.ts` | 自包含单页:Tab 双视图(网格|文件树)+ 源码抽屉 + 折叠|
+| `serve/page.ts` | 自包含单页:Tab 双视图(网格|文件树)+ 源码抽屉 + 折叠 + AI 解读面板与「✨ 解读」开关|
 | `serve/highlight.ts` | 行级轻量高亮(四类 token,先转义再包 span,超长行降级)|
 | `serve/source.ts` | readSource:chunk 白名单校验→实时读盘→高亮,`{status,body}` 形状同 done|
-| `serve/server.ts` | node:http 路由（GET / / /api/state / /api/source / POST /api/done,每请求现读,错误兜底 500）|
+| `serve/interpret.ts` | /api/interpret 结果函数(白名单+增量缓存+在途去重)|
+| `serve/server.ts` | node:http 路由（GET / / /api/state / /api/source / /api/interpret / POST /api/done,每请求现读,错误兜底 500）|
 | `cli.ts` / `cli-learn.ts` / `cli-verify.ts` / `cli-serve.ts` | CLI 命令 map / learn / done / verify / serve |
 
 ## 明天可选的下一步（按价值排序，记忆里也有）
