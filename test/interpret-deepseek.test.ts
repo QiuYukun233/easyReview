@@ -28,6 +28,12 @@ describe('DeepSeekInterpreter', () => {
     const boom = { chat: { completions: { create: async () => { throw new Error('网络挂了'); } } } };
     expect(await new DeepSeekInterpreter(boom, 'm').interpret(inputFor())).toBeNull();
   });
+
+  it('函数名单不一致 → 过滤未知名并保留命中的', async () => {
+    const bad = { ...GOOD, functions: [{ name: 'f1', gist: 'g' }, { name: 'invented', gist: 'x' }] };
+    const r = await new DeepSeekInterpreter(fakeClient(JSON.stringify(bad)), 'm').interpret(inputFor());
+    expect(r!.functions).toEqual([{ name: 'f1', gist: 'g' }]);
+  });
 });
 
 describe('interpretUserPrompt / INTERPRET_SYSTEM', () => {
@@ -36,6 +42,7 @@ describe('interpretUserPrompt / INTERPRET_SYSTEM', () => {
     expect(p).toContain('同章邻居:b');
     expect(p).toContain('```rust');
     expect(p).toContain('fn f1()');
+    expect(p).toContain('(0.10)');
     expect(INTERPRET_SYSTEM).toContain('严禁发明');
     expect(INTERPRET_SYSTEM).toContain('json');
   });

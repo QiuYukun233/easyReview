@@ -22,7 +22,12 @@ export class DeepSeekInterpreter implements Interpreter {
       if (!content) throw new Error('空内容');
       const parsed = InterpretSchema.safeParse(JSON.parse(content));
       if (!parsed.success) throw new Error('JSON 不符合 InterpretSchema');
-      return parsed.data;
+      const known = new Set(input.functions.map((f) => f.name));
+      const kept = parsed.data.functions.filter((f) => known.has(f.name));
+      if (kept.length !== parsed.data.functions.length || kept.length !== input.functions.length) {
+        console.warn(`[interpret] 块 ${input.chunkId} 函数名单与事实不一致(返回 ${parsed.data.functions.length},命中 ${kept.length}/${input.functions.length})——已过滤未知名`);
+      }
+      return { ...parsed.data, functions: kept };
     } catch (err) {
       console.warn(`[interpret] 块 ${input.chunkId} 解读失败:${String(err)}`);
       return null;

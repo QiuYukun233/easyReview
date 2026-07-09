@@ -31,7 +31,7 @@ export function interpretUserPrompt(i: InterpretInput): string {
     '确定性事实:\n' +
     `- 块:${i.chunkName}(文件 ${i.file},章 ${i.chapterName})\n` +
     `- 风险:${i.riskBucket} · 架构贡献度:${i.contribBucket}\n` +
-    `- 信号档位:相对churn ${levelOf(s.relChurn)} · 共变耦合 ${levelOf(s.coupling)} · 所有权集中 ${levelOf(s.ownership)} · 名字扇入中心度 ${levelOf(s.centrality)}\n` +
+    `- 信号档位:相对churn ${levelOf(s.relChurn)}(${s.relChurn.toFixed(2)}) · 共变耦合 ${levelOf(s.coupling)}(${s.coupling.toFixed(2)}) · 所有权集中 ${levelOf(s.ownership)}(${s.ownership.toFixed(2)}) · 名字扇入中心度 ${levelOf(s.centrality)}(${s.centrality.toFixed(2)})\n` +
     `- 同章邻居:${i.neighbors.join('、') || '(无)'}\n` +
     `- 函数名单:${i.functions.map((f) => `${f.name}(第${f.startLine}行)`).join('、') || '(无独立函数)'}` +
     (i.truncated ? '\n- 注意:文件超长,以下源码被截断,只含开头部分。' : '') +
