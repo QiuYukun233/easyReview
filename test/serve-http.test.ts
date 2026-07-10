@@ -109,4 +109,44 @@ describe('viewer http server', () => {
     expect(b.lines[0]).toContain('tok-k');
     expect((await fetch(url + '/api/source')).status).toBe(400);
   });
+
+  it('GET /api/interpret: 注入 fake → 200 落盘;interpreter null → 503;无参 → 400', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'easyrev-http-'));
+    dirs.push(dir);
+    const repo = join(dir, 'repo');
+    mkdirSync(join(repo, 'crates/foo/src'), { recursive: true });
+    writeFileSync(join(repo, 'crates/foo/src/a.rs'), 'fn f1() {}\n');
+    writeFileSync(join(dir, 'easyreview.tree.json'), JSON.stringify({ ...makeViewerTree(), repo }));
+    const fake = { interpret: async () => ({ overview: 'o', dataFlow: 'd', calls: 'c', functions: [] }) };
+    const server = createViewerServer(dir, { interpreter: fake });
+    servers.push(server);
+    await new Promise<void>((res) => server.listen(0, '127.0.0.1', res));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const r = await fetch(url + '/api/interpret?chunk=' + encodeURIComponent(A));
+    expect(r.status).toBe(200);
+    const b = await r.json();
+    expect(b.ok).toBe(true);
+    expect(b.interpretation.overview).toBe('o');
+    expect(JSON.parse(readFileSync(join(dir, 'easyreview.interpret.json'), 'utf8')).entries[A].overview).toBe('o');
+    expect((await fetch(url + '/api/interpret')).status).toBe(400);
+
+    // 无 key + 已有缓存 → 仍然能看(缓存命中优先于 503,这是设计行为)
+    const serverNoKey = createViewerServer(dir, { interpreter: null });
+    servers.push(serverNoKey);
+    await new Promise<void>((res) => serverNoKey.listen(0, '127.0.0.1', res));
+    const urlNoKey = `http://127.0.0.1:${(serverNoKey.address() as AddressInfo).port}`;
+    const rc = await fetch(urlNoKey + '/api/interpret?chunk=' + encodeURIComponent(A));
+    expect(rc.status).toBe(200);
+    expect((await rc.json()).cached).toBe(true);
+
+    // 无 key + 无缓存 → 503
+    const dir2 = mkdtempSync(join(tmpdir(), 'easyrev-http-'));
+    dirs.push(dir2);
+    writeFileSync(join(dir2, 'easyreview.tree.json'), JSON.stringify({ ...makeViewerTree(), repo }));
+    const server503 = createViewerServer(dir2, { interpreter: null });
+    servers.push(server503);
+    await new Promise<void>((res) => server503.listen(0, '127.0.0.1', res));
+    const url2 = `http://127.0.0.1:${(server503.address() as AddressInfo).port}`;
+    expect((await fetch(url2 + '/api/interpret?chunk=' + encodeURIComponent(A))).status).toBe(503);
+  });
 });
