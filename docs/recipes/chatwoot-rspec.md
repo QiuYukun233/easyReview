@@ -3,7 +3,7 @@
 verify Ruby 需要一套能跑 rspec 的环境。本配方用 Docker Compose 立起 chatwoot 的最小测试环境
 (按其 CI `run_foss_spec.yml` 裁剪:pg16 + redis + ruby 3.4.4)。
 
-**状态:活文档——真仓验收踩到的坑直接修回这里,验收通过的版本才算定稿。**
+**状态:2026-07-12 真仓验收通过(chatwoot @ 11deffdd5:show 圈定镜像+扫描 2 个 spec、基线 2 绿;突变 `include UrlHelper` 后镜像 spec 变红、预测命中→通过;真实仓零接触、沙箱字节还原)。下述模板即验收版本。**
 
 ## 一次性安装
 
@@ -18,15 +18,19 @@ docker compose -f docker-compose.easyreview.yaml run --rm -T rspec bundle instal
 docker compose -f docker-compose.easyreview.yaml run --rm -T rspec bundle exec rake db:create db:schema:load
 ```
 
-已知雷(来自 chatwoot CI 与实现审查):
-- CE spec 不含 enterprise——若加载报 enterprise 相关错误,rspec 只指定 spec 文件路径时通常不受影响;必要时在沙箱里临时排除。
+已知雷(chatwoot CI + 实现审查 + 2026-07-12 真仓验收实测):
+- **`EXECJS_RUNTIME: Disabled` 必须有**(已进模板)——ruby:3.4.4 容器无 JS runtime,缺它 uglifier 一加载就 `ExecJS::RuntimeUnavailable`(验收实踩)。
+- **compose 顶层 `name:` 必须钉死**(已进模板)——verify 的 cwd 是沙箱 `src/`,不钉名的话项目名随目录名分叉,沙箱侧会另起一套空 pg/空 bundle 卷(验收实踩)。
+- **pg 数据在 tmpfs**:`docker compose down`/Docker 重启后 schema 蒸发——若 spec 突然全红报 `relation ... does not exist`,重跑 `rake db:schema:load` 即可。容器组会一直挂着,不想要时 `docker compose -f docker-compose.easyreview.yaml down`(记得之后重载 schema)。
+- CE spec 不含 enterprise——rspec 只指定 spec 文件路径时通常不受影响;必要时在沙箱里临时排除。
 - `NODE_OPTIONS=--openssl-legacy-provider` 已在 compose 里预置。
-- 数据库连接环境变量名以 chatwoot `config/database.yml` 为准——若连接失败,对照该文件调整 compose 的 environment(验收时校准)。
+- 数据库连接环境变量(`POSTGRES_HOST`/`POSTGRES_USERNAME` 等)已按 chatwoot `config/database.yml` 校准(验收验证)。
 - `easyreview.runner.json` 的 `cmd` 首词必须是真实可执行文件(如 `docker` = docker.exe)——easyreview 用 execFile 不经 shell,npm 式 `.cmd`/`.bat` shim 无法启动。
 
 ## docker-compose.easyreview.yaml(模板)
 
 ```yaml
+name: chatwoot-easyreview
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -46,6 +50,7 @@ services:
       - bundle:/usr/local/bundle
     environment:
       RAILS_ENV: test
+      EXECJS_RUNTIME: Disabled
       POSTGRES_HOST: postgres
       POSTGRES_USERNAME: postgres
       POSTGRES_PASSWORD: ''
