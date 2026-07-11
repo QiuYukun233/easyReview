@@ -18,7 +18,7 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **45 文件 / 141 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
+- **47 文件 / 151 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
@@ -50,6 +50,9 @@ npm run verify -- crates/chem_field/src/core/field.rs --repo D:/dev/umwelt-bevy 
 #   → 基线编译不过会明确报错（不再误报为"未覆盖"）
 npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测试名> --repo D:/dev/umwelt-bevy --out .
 #   → 注释一行、跑 cargo、算真实爆炸半径、比对你的预测、通过则标 verified（还原原文件）
+# 2026-07-11 起 verify 沙箱化：突变与全部 cargo 构建发生在 `os.tmpdir()/easyreview-sandbox/<仓路径hash>/`
+#   （`src/` 增量同步副本 + 独立 `CARGO_TARGET_DIR`），真实仓源码和 target/ 零写入；
+#   `easyreview verify --clean` 删沙箱。首次全量编译较慢，之后增量。
 
 # ⑤ Ruby 仓库（如 chatwoot）：同一套命令 + --include 限目录（outDir 与 umwelt-bevy 隔离）
 npm run map   -- --repo E:/learning/agent-research/repos/chatwoot --include app --out <chatwoot-out>
@@ -88,7 +91,8 @@ npm run serve -- --out <chatwoot-out> --port 4872
 | `label/claude.ts` | ClaudeLabeler（messages.parse+zod，client 可注入、逐块弹性、并发5）+ makeClaudeLabelerFromEnv |
 | `label/deepseek.ts` | DeepSeekLabeler（openai SDK 指向 DeepSeek，json_object+逐块弹性）+ makeDeepSeekLabelerFromEnv，**默认 provider** |
 | `verify/parse.ts` | 解析 cargo test 输出（test…ok/FAILED + 编译崩）|
-| `verify/cargo.ts` | runCargoTests（可注入 exec，测试用 fake）|
+| `verify/cargo.ts` | runCargoTests（`Exec (cmd,args,cwd,env?)` 可注入、测试用 fake；`targetDir` 参数经 `CARGO_TARGET_DIR` 注入，隔离沙箱构建产物）|
+| `verify/sandbox.ts` | 沙箱路径计算 + 内容比对增量同步（未变文件 mtime 不动——cargo 增量前提）|
 | `extract/parser.ts` | 按语言的 tree-sitter parser 单例 getParser（getRustParser 为薄包装,pick-site.ts 沿用）|
 | `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：优先 tree-sitter 好语句、regex 兜底）|
 | `verify/pick-site.ts` | pickPreferredSite：tree-sitter 挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail |
