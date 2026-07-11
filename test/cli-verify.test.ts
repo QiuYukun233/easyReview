@@ -1,16 +1,24 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeTempRepo, writeRepoFile, commitAll } from './helpers.js';
 import { runMap } from '../src/cli.js';
-import { runVerifyShow, runVerifyPredict } from '../src/cli-verify.js';
-import { readFileSync, existsSync } from 'node:fs';
+import { runVerifyShow, runVerifyPredict, runVerifyClean } from '../src/cli-verify.js';
+import { sandboxFor } from '../src/verify/sandbox.js';
+import { readFileSync, existsSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 let cleanups: Array<() => void> = [];
 afterEach(() => { cleanups.forEach((c) => c()); cleanups = []; });
 
 describe('verify show/predict', () => {
+  function trackSandbox(repo: string) {
+    const sb = sandboxFor(repo);
+    cleanups.push(() => rmSync(sb.dir, { recursive: true, force: true }));
+    return sb;
+  }
+
   it('show caches baseline + writes prompt; predict judges + marks verified', async () => {
     const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    trackSandbox(dir);
     writeRepoFile(dir, 'crates/chem_field/Cargo.toml', '[package]\nname="chem_field"');
     writeRepoFile(dir, 'crates/chem_field/src/core/field.rs',
       'pub fn step(v: f32) -> f32 {\n    let dt = 0.1;\n    v + dt\n}\n');
@@ -41,6 +49,7 @@ describe('verify show/predict', () => {
 
   it('works for a non-chem_field crate and groups tests by module', async () => {
     const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    trackSandbox(dir);
     writeRepoFile(dir, 'crates/grid_workshop/Cargo.toml', '[package]\nname="grid_workshop"');
     writeRepoFile(dir, 'crates/grid_workshop/src/build_ui/routing_fsm.rs',
       'pub fn route(x: i32) -> i32 {\n    let step = 1;\n    x + step\n}\n');
@@ -75,6 +84,7 @@ describe('verify show/predict', () => {
 
   it('rejects a chunk whose baseline crate fails to compile', async () => {
     const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    trackSandbox(dir);
     writeRepoFile(dir, 'crates/broken/Cargo.toml', '[package]\nname="broken"');
     writeRepoFile(dir, 'crates/broken/src/lib.rs', 'pub fn f(x: i32) -> i32 {\n    let y = 1;\n    x + y\n}\n');
     commitAll(dir, 'init');
@@ -85,5 +95,64 @@ describe('verify show/predict', () => {
     await expect(
       runVerifyShow({ repo: dir, outDir: dir, chunkId, exec: fakeExec }),
     ).rejects.toThrow(/无法编译/);
+  });
+
+  it('mutates only the sandbox; the real repo stays byte-identical throughout', async () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    const sb = trackSandbox(dir);
+    writeRepoFile(dir, 'crates/chem_field/Cargo.toml', '[package]\nname="chem_field"');
+    writeRepoFile(dir, 'crates/chem_field/src/core/field.rs',
+      'pub fn step(v: f32) -> f32 {\n    let dt = 0.1;\n    v + dt\n}\n');
+    commitAll(dir, 'init');
+    await runMap({ repo: dir, outDir: dir });
+
+    const chunkId = 'crates/chem_field/src/core/field.rs';
+    const realFile = join(dir, chunkId);
+    const realBefore = readFileSync(realFile);
+
+    let phase = 'baseline';
+    let seenCwd = '';
+    let seenTarget: string | undefined;
+    let mutationSeenInSandbox = false;
+    let realCleanDuringMutation = true;
+    const fakeExec = async (_cmd: string, _args: string[], cwd: string, env?: NodeJS.ProcessEnv) => {
+      seenCwd = cwd;
+      seenTarget = env?.CARGO_TARGET_DIR;
+      if (phase === 'mutated') {
+        const sbNow = readFileSync(join(sb.srcDir, chunkId), 'utf8');
+        if (sbNow !== realBefore.toString('utf8')) mutationSeenInSandbox = true;
+        if (!readFileSync(realFile).equals(realBefore)) realCleanDuringMutation = false;
+        return 'test core::field::t1 ... ok\ntest core::field::t2 ... FAILED';
+      }
+      return 'test core::field::t1 ... ok\ntest core::field::t2 ... ok';
+    };
+
+    await runVerifyShow({ repo: dir, outDir: dir, chunkId, exec: fakeExec });
+    expect(seenCwd).toBe(sb.srcDir);
+    expect(seenTarget).toBe(sb.targetDir);
+    expect(readFileSync(realFile).equals(realBefore)).toBe(true);
+
+    phase = 'mutated';
+    await runVerifyPredict({ repo: dir, outDir: dir, chunkId, predicted: ['core::field::t2'], exec: fakeExec });
+    expect(seenCwd).toBe(sb.srcDir);
+    expect(seenTarget).toBe(sb.targetDir);
+    expect(mutationSeenInSandbox).toBe(true);
+    expect(realCleanDuringMutation).toBe(true);
+    expect(readFileSync(realFile).equals(realBefore)).toBe(true);
+    expect(readFileSync(join(sb.srcDir, chunkId), 'utf8')).toBe(realBefore.toString('utf8'));
+  });
+
+  it('verify --clean removes the whole sandbox and is idempotent', () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    const sb = trackSandbox(dir);
+    mkdirSync(sb.srcDir, { recursive: true });
+    mkdirSync(sb.targetDir, { recursive: true });
+    writeFileSync(join(sb.srcDir, 'x.rs'), 'x');
+    expect(existsSync(sb.dir)).toBe(true);
+
+    runVerifyClean(dir);
+    expect(existsSync(sb.dir)).toBe(false);
+
+    runVerifyClean(dir); // 沙箱已不存在——幂等,不抛
   });
 });
