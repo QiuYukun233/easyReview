@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { GradedTree, Chunk } from './types.js';
 import { runCargoTests, type Exec } from './verify/cargo.js';
@@ -157,4 +157,15 @@ export async function runVerifyPredict(o: PredictOpts): Promise<void> {
         blast.note ? `\n> ${blast.note}` : '',
       ];
   writeFileSync(verifyMd(o.outDir), lines.filter((l) => l !== '').join('\n'));
+}
+
+/** 删除该仓对应的整个沙箱(源码副本 + 编译缓存)。沙箱不存在也正常返回(幂等)。 */
+export function runVerifyClean(repo: string): void {
+  const sb = sandboxFor(repo);
+  if (existsSync(sb.dir)) {
+    rmSync(sb.dir, { recursive: true, force: true });
+    console.log(`✓ 已删除沙箱 ${sb.dir}`);
+  } else {
+    console.log(`沙箱不存在（${sb.dir}）——无需清理`);
+  }
 }

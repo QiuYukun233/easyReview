@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeTempRepo, writeRepoFile, commitAll } from './helpers.js';
 import { runMap } from '../src/cli.js';
-import { runVerifyShow, runVerifyPredict } from '../src/cli-verify.js';
+import { runVerifyShow, runVerifyPredict, runVerifyClean } from '../src/cli-verify.js';
 import { sandboxFor } from '../src/verify/sandbox.js';
-import { readFileSync, existsSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 let cleanups: Array<() => void> = [];
@@ -140,5 +140,19 @@ describe('verify show/predict', () => {
     expect(realCleanDuringMutation).toBe(true);
     expect(readFileSync(realFile).equals(realBefore)).toBe(true);
     expect(readFileSync(join(sb.srcDir, chunkId), 'utf8')).toBe(realBefore.toString('utf8'));
+  });
+
+  it('verify --clean removes the whole sandbox and is idempotent', () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    const sb = trackSandbox(dir);
+    mkdirSync(sb.srcDir, { recursive: true });
+    mkdirSync(sb.targetDir, { recursive: true });
+    writeFileSync(join(sb.srcDir, 'x.rs'), 'x');
+    expect(existsSync(sb.dir)).toBe(true);
+
+    runVerifyClean(dir);
+    expect(existsSync(sb.dir)).toBe(false);
+
+    runVerifyClean(dir); // 沙箱已不存在——幂等,不抛
   });
 });
