@@ -89,6 +89,23 @@ describe('syncSandbox', () => {
     expect(existsSync(join(sb.srcDir, 'olddir'))).toBe(false);
   });
 
+  it('survives type transitions: repo file→dir and dir→file between syncs', () => {
+    const repo = makeRepo();
+    write(repo, 'thing', 'was a file');
+    write(repo, 'bar/inner.rs', 'was a dir');
+    const sb = trackSandbox(repo);
+    syncSandbox(repo, sb.srcDir);
+
+    rmSync(join(repo, 'thing'));
+    write(repo, 'thing/nested.rs', 'now a dir');
+    rmSync(join(repo, 'bar'), { recursive: true });
+    write(repo, 'bar', 'now a file');
+    syncSandbox(repo, sb.srcDir);
+
+    expect(readFileSync(join(sb.srcDir, 'thing/nested.rs'), 'utf8')).toBe('now a dir');
+    expect(readFileSync(join(sb.srcDir, 'bar'), 'utf8')).toBe('now a file');
+  });
+
   it('copies binary files byte-for-byte', () => {
     const repo = makeRepo();
     const bytes = Buffer.from([0, 255, 1, 254, 10, 13, 0]);

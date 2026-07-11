@@ -44,6 +44,14 @@ function syncDir(from: string, to: string, stats: SyncStats): void {
     // symlink 等其它类型跳过
   }
 
+  // 先清幽灵/类型变更的旧条目,再拷——否则 file↔dir 类型转换时写入会撞上旧条目(EISDIR/EEXIST)
+  const keepDirs = new Set(dirs);
+  const keepFiles = new Set(files);
+  for (const e of readdirSync(to, { withFileTypes: true })) {
+    const keep = e.isDirectory() ? keepDirs.has(e.name) : keepFiles.has(e.name);
+    if (!keep) { rmSync(join(to, e.name), { recursive: true, force: true }); stats.deleted++; }
+  }
+
   for (const name of files) {
     const srcBuf = readFileSync(join(from, name));
     const destPath = join(to, name);
@@ -55,12 +63,5 @@ function syncDir(from: string, to: string, stats: SyncStats): void {
     const destPath = join(to, name);
     mkdirSync(destPath, { recursive: true });
     syncDir(join(from, name), destPath, stats);
-  }
-
-  const keepDirs = new Set(dirs);
-  const keepFiles = new Set(files);
-  for (const e of readdirSync(to, { withFileTypes: true })) {
-    const keep = e.isDirectory() ? keepDirs.has(e.name) : keepFiles.has(e.name);
-    if (!keep) { rmSync(join(to, e.name), { recursive: true, force: true }); stats.deleted++; }
   }
 }
