@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { GradedTree, Chunk } from './types.js';
 import { runCargoTests, type Exec } from './verify/cargo.js';
+import { sandboxFor, syncSandbox } from './verify/sandbox.js';
 import { chooseMutation } from './verify/mutate.js';
 import { probe } from './verify/probe.js';
 import { judge } from './verify/judge.js';
@@ -40,8 +41,16 @@ export async function runVerifyShow(o: ShowOpts): Promise<void> {
   const op = await chooseMutation(chunk, leaves, source);
   if (!op) throw new Error(`${chunk.file} 找不到可突变的语句行——换个块试试`);
 
-  console.error(`⏳ 首次编译 ${crate} 可能要几分钟（bevy/egui 链接很重），属正常、不是卡住。`);
-  const baseline = await runCargoTests(o.repo, crate, o.exec);
+  const sb = sandboxFor(o.repo);
+  const firstRun = !existsSync(sb.targetDir);
+  const stats = syncSandbox(o.repo, sb.srcDir);
+  console.error(`⏳ 沙箱已同步(${stats.copied} 个文件更新,位置 ${sb.dir})`);
+  console.error(
+    firstRun
+      ? `⏳ 沙箱首次全量编译 ${crate} 可能要 5-10 分钟（独立缓存,不碰真实仓的 target/），属正常、不是卡住。`
+      : `⏳ 编译 ${crate}（沙箱增量）…`,
+  );
+  const baseline = await runCargoTests(sb.srcDir, crate, o.exec, sb.targetDir);
   if (!baseline.compiled) {
     throw new Error(`${crate} 的基线 cargo test 无法编译——先修好编译错误再验证这个块。`);
   }
@@ -91,13 +100,24 @@ export async function runVerifyPredict(o: PredictOpts): Promise<void> {
     green: string[]; all: string[]; op: import('./types.js').MutationOp;
   };
 
-  const blast = await probe({
-    chunkId: chunk.id,
-    absFile: join(o.repo, chunk.file),
-    op: cached.op,
-    baselineGreen: cached.green,
-    runAfter: () => runCargoTests(o.repo, crate, o.exec),
-  });
+  const sb = sandboxFor(o.repo);
+  syncSandbox(o.repo, sb.srcDir);
+  let blast: import('./types.js').BlastRadius;
+  try {
+    blast = await probe({
+      chunkId: chunk.id,
+      absFile: join(sb.srcDir, chunk.file),
+      op: cached.op,
+      baselineGreen: cached.green,
+      runAfter: () => runCargoTests(sb.srcDir, crate, o.exec, sb.targetDir),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('mutation site mismatch')) {
+      throw new Error(`${msg}\n源码已变——先重跑 \`easyreview verify ${chunk.id}\` 刷新基线`);
+    }
+    throw e;
+  }
 
   // 空爆炸半径（非编译崩）= 该块没被测试覆盖 → 无法用突变探针验证，不能算通过
   const uncovered = !blast.compileBroke && blast.newlyFailing.length === 0;
