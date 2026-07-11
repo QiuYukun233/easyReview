@@ -22,6 +22,18 @@ function unwrap(node: Parser.SyntaxNode | null): Parser.SyntaxNode | null {
   return n;
 }
 
+// heredoc 陷阱:heredoc_body 是赋值/调用节点的兄弟而非后代,单行过滤拦不住开头行——
+// 注释掉 `x = <<~SQL` 会让 heredoc 体变裸代码(SyntaxError),子树含 heredoc_beginning 一律排除。
+function hasHeredoc(n: Parser.SyntaxNode): boolean {
+  const stack: Parser.SyntaxNode[] = [n];
+  while (stack.length) {
+    const c = stack.pop()!;
+    if (c.type === 'heredoc_beginning') return true;
+    for (let i = 0; i < c.childCount; i++) stack.push(c.child(i)!);
+  }
+  return false;
+}
+
 function collect(root: Parser.SyntaxNode, pred: (n: Parser.SyntaxNode) => boolean): Parser.SyntaxNode[] {
   const out: Parser.SyntaxNode[] = [];
   const stack: Parser.SyntaxNode[] = [root];
@@ -58,7 +70,8 @@ export async function pickPreferredSite(
       const candidates = collect(tree.rootNode, (n) =>
         RUBY_TARGET.has(n.type) &&
         n.startPosition.row === n.endPosition.row &&
-        !!n.parent && RUBY_STMT_PARENT.has(n.parent.type));
+        !!n.parent && RUBY_STMT_PARENT.has(n.parent.type) &&
+        !hasHeredoc(n));
       return firstSiteOf(candidates, lines);
     }
     const stmts = collect(tree.rootNode, (n) => n.type === 'expression_statement');

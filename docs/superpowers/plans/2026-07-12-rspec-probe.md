@@ -717,6 +717,18 @@ function unwrap(node: Parser.SyntaxNode | null): Parser.SyntaxNode | null {
   return n;
 }
 
+// heredoc 陷阱:heredoc_body 是赋值/调用节点的兄弟而非后代,单行过滤拦不住开头行——
+// 注释掉 `x = <<~SQL` 会让 heredoc 体变裸代码(SyntaxError),子树含 heredoc_beginning 一律排除。
+function hasHeredoc(n: Parser.SyntaxNode): boolean {
+  const stack: Parser.SyntaxNode[] = [n];
+  while (stack.length) {
+    const c = stack.pop()!;
+    if (c.type === 'heredoc_beginning') return true;
+    for (let i = 0; i < c.childCount; i++) stack.push(c.child(i)!);
+  }
+  return false;
+}
+
 function collect(root: Parser.SyntaxNode, pred: (n: Parser.SyntaxNode) => boolean): Parser.SyntaxNode[] {
   const out: Parser.SyntaxNode[] = [];
   const stack: Parser.SyntaxNode[] = [root];
@@ -753,7 +765,8 @@ export async function pickPreferredSite(
       const candidates = collect(tree.rootNode, (n) =>
         RUBY_TARGET.has(n.type) &&
         n.startPosition.row === n.endPosition.row &&
-        !!n.parent && RUBY_STMT_PARENT.has(n.parent.type));
+        !!n.parent && RUBY_STMT_PARENT.has(n.parent.type) &&
+        !hasHeredoc(n));
       return firstSiteOf(candidates, lines);
     }
     const stmts = collect(tree.rootNode, (n) => n.type === 'expression_statement');
@@ -813,6 +826,7 @@ function isCommentableRuby(line: string): boolean {
   if (t === '' || t.startsWith('#')) return false;
   if (/^(def |end\b|class |module |if |unless |elsif |else\b|when |case\b|begin\b|rescue\b|ensure\b|until |while |for )/.test(t)) return false;
   if (/\bdo(\s*\|[^|]*\|)?\s*$/.test(t)) return false; // 块头(xxx.each do |i|)
+  if (/<<[-~]?['"`]?[A-Za-z_]/.test(t)) return false; // heredoc 开头行——注释会让 heredoc 体变裸代码
   return true;
 }
 
@@ -853,9 +867,11 @@ export async function chooseMutation(chunk: Chunk, leaves: Leaf[], source: strin
 
 注意:tree-sitter-ruby 的实际节点类型若与 `RUBY_TARGET`/`RUBY_STMT_PARENT` 假设不符(以测试跑真 wasm 的结果为准),按真实节点类型调整这两个集合并在提交信息里注明——**不许**为凑测试削弱「单行+语句位」两个条件本身。
 
+> 修订 2026-07-12:质量审发现 heredoc 开头行会被选中(heredoc_body 是兄弟节点,单行过滤拦不住),注释后 heredoc 体变裸代码 = SyntaxError——两条路径都加 heredoc 排除 + 回归测试。
+
 - [ ] **Step 4: Run tests + typecheck**
 
-`npx vitest run test/pick-site-ruby.test.ts` → 6 passed;`npx vitest run test/cli-verify.test.ts` → 5 passed(Rust 路径回归);`npm run typecheck` → 干净
+`npx vitest run test/pick-site-ruby.test.ts` → 8 passed(含 heredoc/operator_assignment 回归);`npx vitest run test/cli-verify.test.ts` → 5 passed(Rust 路径回归);`npm run typecheck` → 干净
 
 - [ ] **Step 5: Commit**
 

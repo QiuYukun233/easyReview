@@ -39,6 +39,7 @@ function isCommentableRuby(line: string): boolean {
   if (t === '' || t.startsWith('#')) return false;
   if (/^(def |end\b|class |module |if |unless |elsif |else\b|when |case\b|begin\b|rescue\b|ensure\b|until |while |for )/.test(t)) return false;
   if (/\bdo(\s*\|[^|]*\|)?\s*$/.test(t)) return false; // 块头(xxx.each do |i|)
+  if (/<<[-~]?['"`]?[A-Za-z_]/.test(t)) return false; // heredoc 开头行——注释会让 heredoc 体变裸代码
   return true;
 }
 

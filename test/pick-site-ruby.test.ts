@@ -38,6 +38,25 @@ describe('pickPreferredSite (ruby)', () => {
     expect(site).toEqual({ line: 3, original: '    process(i)' });
   });
 
+  it('skips heredoc openers — commenting them would orphan the heredoc body', async () => {
+    const src = [
+      'def run',
+      '  sql = <<~SQL',
+      '    SELECT 1',
+      '  SQL',
+      '  execute(sql)',
+      'end',
+    ].join('\n');
+    const site = await pickPreferredSite(src, RUBY);
+    expect(site).toEqual({ line: 5, original: '  execute(sql)' });
+  });
+
+  it('picks operator_assignment in statement position', async () => {
+    const src = 'def bump\n  @count += 1\nend\n';
+    const site = await pickPreferredSite(src, RUBY);
+    expect(site).toEqual({ line: 2, original: '  @count += 1' });
+  });
+
   it('returns null when nothing qualifies', async () => {
     const site = await pickPreferredSite('class Empty\nend\n', RUBY);
     expect(site).toBeNull();
