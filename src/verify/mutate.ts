@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { Chunk, Leaf, MutationOp } from '../types.js';
 import { pickPreferredSite } from './pick-site.js';
+import { langOf, RUST } from '../extract/lang.js';
 
 /**
  * 在 absFile 上临时施突变、跑 fn、无条件还原。
@@ -23,7 +24,7 @@ export async function withMutation<T>(absFile: string, op: MutationOp, fn: () =>
   }
 }
 
-function isCommentable(line: string): boolean {
+function isCommentableRust(line: string): boolean {
   const t = line.trim();
   if (t === '') return false;
   if (t.startsWith('//') || t.startsWith('#[')) return false;
@@ -33,30 +34,41 @@ function isCommentable(line: string): boolean {
   return true;
 }
 
+function isCommentableRuby(line: string): boolean {
+  const t = line.trim();
+  if (t === '' || t.startsWith('#')) return false;
+  if (/^(def |end\b|class |module |if |unless |elsif |else\b|when |case\b|begin\b|rescue\b|ensure\b|until |while |for )/.test(t)) return false;
+  if (/\bdo(\s*\|[^|]*\|)?\s*$/.test(t)) return false; // 块头(xxx.each do |i|)
+  return true;
+}
+
 function buildOp(file: string, line: number, original: string): MutationOp {
   const indent = original.match(/^\s*/)?.[0] ?? '';
+  const prefix = langOf(file)?.id === 'ruby' ? '# ' : '// ';
   return {
     file,
     line,
     original,
-    mutated: `${indent}// ${original.trim()}`,
+    mutated: `${indent}${prefix}${original.trim()}`,
     description: `注释掉 ${file}:${line} 的一行语句`,
   };
 }
 
 /** 为一个 chunk 选突变位点：优先 tree-sitter 挑"好语句"（赋值/调用→大概率红测试），
- *  挑不到回退现有 regex 扫描（loc≥3 函数逐行找第一条可注释语句）。都没有返回 null。 */
+ *  挑不到回退 regex 扫描（loc≥3 函数逐行找第一条可注释语句,规则按语言）。都没有返回 null。 */
 export async function chooseMutation(chunk: Chunk, leaves: Leaf[], source: string): Promise<MutationOp | null> {
-  const pref = await pickPreferredSite(source);
+  const lang = langOf(chunk.file) ?? RUST;
+  const pref = await pickPreferredSite(source, lang);
   if (pref) return buildOp(chunk.file, pref.line, pref.original);
 
-  // 回退：现有 regex 逻辑（绝不退步）
+  // 回退：regex 逐行扫描（绝不退步）
+  const commentable = lang.id === 'ruby' ? isCommentableRuby : isCommentableRust;
   const lines = source.split('\n');
   const fns = leaves.filter((l) => l.file === chunk.file && l.loc >= 3).sort((a, b) => a.startLine - b.startLine);
   for (const fn of fns) {
     for (let ln = fn.startLine; ln <= fn.endLine; ln++) {
       const original = lines[ln - 1];
-      if (original !== undefined && isCommentable(original)) {
+      if (original !== undefined && commentable(original)) {
         return buildOp(chunk.file, ln, original);
       }
     }
