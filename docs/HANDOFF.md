@@ -60,7 +60,7 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 npm run map   -- --repo E:/learning/agent-research/repos/chatwoot --include app --out <chatwoot-out>
 npm run learn -- --out <chatwoot-out>
 npm run serve -- --out <chatwoot-out> --port 4872
-#   → 章按 Rails 布局自动切（app:models、app:controllers/...）；verify 碰 Ruby 块会友好拒绝（rspec=子项目②）
+#   → 章按 Rails 布局自动切（app:models、app:controllers/...）；verify 已支持 Ruby 块（rspec 探针,2026-07-12;无 easyreview.runner.json 时给可操作报错）
 
 # ④ web viewer：npm run serve -- --out . [--port 4870] → http://localhost:4870
 #   → 点亮地图（风险×贡献度网格,灰/绿/绿框=verified/黄=下一步）+ 右侧固定"下一步"卡片
