@@ -559,7 +559,8 @@ if (cmd === 'verify') {
   const rest = process.argv.slice(3);
   if (rest.includes('--clean')) {
     const { repo } = parseArgs(rest);
-    import('./cli-verify.js').then(({ runVerifyClean }) => runVerifyClean(repo));
+    import('./cli-verify.js').then(({ runVerifyClean }) => runVerifyClean(repo))
+      .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); });
   } else {
     const chunkId = rest.find((a, i) => !a.startsWith('--') && !(i > 0 && rest[i - 1].startsWith('--')));
     if (!chunkId) { console.error('用法: easyreview verify <chunkId> [--predict a,b] [--repo <p>] [--out <d>] | verify --clean [--repo <p>]'); process.exit(1); }
@@ -576,6 +577,8 @@ if (cmd === 'verify') {
   }
 }
 ```
+
+> 修订 2026-07-11:--clean 分支补 `.catch`(质量审发现 rmSync 失败会成为未处理 rejection——沙箱内文件被锁时正是 --clean 的典型使用场景)。
 
 - [ ] **Step 4: Run tests + typecheck**
 

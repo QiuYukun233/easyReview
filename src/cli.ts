@@ -111,7 +111,8 @@ if (cmd === 'verify') {
   const rest = process.argv.slice(3);
   if (rest.includes('--clean')) {
     const { repo } = parseArgs(rest);
-    import('./cli-verify.js').then(({ runVerifyClean }) => runVerifyClean(repo));
+    import('./cli-verify.js').then(({ runVerifyClean }) => runVerifyClean(repo))
+      .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); });
   } else {
     const chunkId = rest.find((a, i) => !a.startsWith('--') && !(i > 0 && rest[i - 1].startsWith('--')));
     if (!chunkId) { console.error('用法: easyreview verify <chunkId> [--predict a,b] [--repo <p>] [--out <d>] | verify --clean [--repo <p>]'); process.exit(1); }
