@@ -18,7 +18,7 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **47 文件 / 151 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
+- **52 文件 / 188 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
@@ -53,6 +53,8 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 # 2026-07-11 起 verify 沙箱化：突变与全部 cargo 构建发生在 `os.tmpdir()/easyreview-sandbox/<仓路径hash>/`
 #   （`src/` 增量同步副本 + 独立 `CARGO_TARGET_DIR`），真实仓源码和 target/ 零写入；
 #   `easyreview verify --clean` 删沙箱。首次全量编译较慢，之后增量。
+# 2026-07-12 起支持 Ruby/rspec：仓根 `easyreview.runner.json` 声明测试命令（chatwoot 配方 `docs/recipes/chatwoot-rspec.md`），
+#   范围=镜像 spec+引用扫描（超上限回退），预测粒度=spec 文件级。
 
 # ⑤ Ruby 仓库（如 chatwoot）：同一套命令 + --include 限目录（outDir 与 umwelt-bevy 隔离）
 npm run map   -- --repo E:/learning/agent-research/repos/chatwoot --include app --out <chatwoot-out>
@@ -90,12 +92,16 @@ npm run serve -- --out <chatwoot-out> --port 4872
 | `label/concurrency.ts` | 共享 mapWithConcurrency（并发池，按输入序返回）|
 | `label/claude.ts` | ClaudeLabeler（messages.parse+zod，client 可注入、逐块弹性、并发5）+ makeClaudeLabelerFromEnv |
 | `label/deepseek.ts` | DeepSeekLabeler（openai SDK 指向 DeepSeek，json_object+逐块弹性）+ makeDeepSeekLabelerFromEnv，**默认 provider** |
+| `verify/runner.ts` | VerifyRunner 接口 + CargoRunner 纯搬运（按语言分发测试域/执行/分组）|
 | `verify/parse.ts` | 解析 cargo test 输出（test…ok/FAILED + 编译崩）|
 | `verify/cargo.ts` | runCargoTests（`Exec (cmd,args,cwd,env?)` 可注入、测试用 fake；`targetDir` 参数经 `CARGO_TARGET_DIR` 注入，隔离沙箱构建产物）|
 | `verify/sandbox.ts` | 沙箱路径计算 + 内容比对增量同步（未变文件 mtime 不动——cargo 增量前提）|
+| `verify/rspec.ts` | 仓级 runner 配置加载 + RspecRunner（`{specFiles}` 展开、目录分组）|
+| `verify/rspec-scope.ts` | 镜像 spec 映射 + 类名引用扫描 + 上限回退 |
+| `verify/rspec-parse.ts` | rspec JSON 噪音提取 + spec 文件级聚合 + 加载崩语义 |
 | `extract/parser.ts` | 按语言的 tree-sitter parser 单例 getParser（getRustParser 为薄包装,pick-site.ts 沿用）|
-| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：优先 tree-sitter 好语句、regex 兜底）|
-| `verify/pick-site.ts` | pickPreferredSite：tree-sitter 挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail |
+| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：语言感知 Rust/Ruby，优先 tree-sitter 好语句、regex 兜底）|
+| `verify/pick-site.ts` | pickPreferredSite：语言感知（Rust/Ruby）挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail；Ruby 侧含 heredoc 排除（注释会孤儿化 heredoc 体）|
 | `verify/probe.ts` | 爆炸半径探针（基线→突变→跑→diff→还原）|
 | `verify/judge.ts` | 判定预测 vs 真实爆炸半径 |
 | `interpret/input.ts` | 解读喂料:整文件源码+确定性事实,contentHash(含 PROMPT_VERSION)|
