@@ -1157,6 +1157,8 @@ export function runVerifyClean(repo: string): void {
 
 注意两处与旧文件的有意差异:①verify.md 代码围栏从写死 `\`\`\`rust` 改为 `langOf(chunk.file)?.fence`;②uncovered 文案去掉了 umwelt 专属的「(如 field/scene/phase 的核心函数)」举例(语言中立化)。现有测试不断言这两处旧文案,不会红;若红了按测试为准回报,不许私改。
 
+> 修订 2026-07-12:计划遗漏了 e1c5fbd 时代的 test/verify-ruby-reject.test.ts(锁「Ruby 一律拒绝」旧行为,与本设计直接冲突)。实现者正确上报;决定改写该文件为锁新边界(无 runner 配置时 show/predict 均可操作报错且零 exec 调用)。
+
 - [ ] **Step 4: Run tests + typecheck**
 
 `npx vitest run test/cli-verify.test.ts` → 7 passed;`npm test` → 全绿;`npm run typecheck` → 干净
