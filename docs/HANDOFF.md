@@ -18,7 +18,7 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **47 文件 / 151 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
+- **52 文件 / 188 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
@@ -53,12 +53,14 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 # 2026-07-11 起 verify 沙箱化：突变与全部 cargo 构建发生在 `os.tmpdir()/easyreview-sandbox/<仓路径hash>/`
 #   （`src/` 增量同步副本 + 独立 `CARGO_TARGET_DIR`），真实仓源码和 target/ 零写入；
 #   `easyreview verify --clean` 删沙箱。首次全量编译较慢，之后增量。
+# 2026-07-12 起支持 Ruby/rspec：仓根 `easyreview.runner.json` 声明测试命令（chatwoot 配方 `docs/recipes/chatwoot-rspec.md`），
+#   范围=镜像 spec+引用扫描（超上限回退），预测粒度=spec 文件级。
 
 # ⑤ Ruby 仓库（如 chatwoot）：同一套命令 + --include 限目录（outDir 与 umwelt-bevy 隔离）
 npm run map   -- --repo E:/learning/agent-research/repos/chatwoot --include app --out <chatwoot-out>
 npm run learn -- --out <chatwoot-out>
 npm run serve -- --out <chatwoot-out> --port 4872
-#   → 章按 Rails 布局自动切（app:models、app:controllers/...）；verify 碰 Ruby 块会友好拒绝（rspec=子项目②）
+#   → 章按 Rails 布局自动切（app:models、app:controllers/...）；verify 已支持 Ruby 块（rspec 探针,2026-07-12;无 easyreview.runner.json 时给可操作报错）
 
 # ④ web viewer：npm run serve -- --out . [--port 4870] → http://localhost:4870
 #   → 点亮地图（风险×贡献度网格,灰/绿/绿框=verified/黄=下一步）+ 右侧固定"下一步"卡片
@@ -90,12 +92,16 @@ npm run serve -- --out <chatwoot-out> --port 4872
 | `label/concurrency.ts` | 共享 mapWithConcurrency（并发池，按输入序返回）|
 | `label/claude.ts` | ClaudeLabeler（messages.parse+zod，client 可注入、逐块弹性、并发5）+ makeClaudeLabelerFromEnv |
 | `label/deepseek.ts` | DeepSeekLabeler（openai SDK 指向 DeepSeek，json_object+逐块弹性）+ makeDeepSeekLabelerFromEnv，**默认 provider** |
+| `verify/runner.ts` | VerifyRunner 接口 + CargoRunner 纯搬运（按语言分发测试域/执行/分组）|
 | `verify/parse.ts` | 解析 cargo test 输出（test…ok/FAILED + 编译崩）|
 | `verify/cargo.ts` | runCargoTests（`Exec (cmd,args,cwd,env?)` 可注入、测试用 fake；`targetDir` 参数经 `CARGO_TARGET_DIR` 注入，隔离沙箱构建产物）|
 | `verify/sandbox.ts` | 沙箱路径计算 + 内容比对增量同步（未变文件 mtime 不动——cargo 增量前提）|
+| `verify/rspec.ts` | 仓级 runner 配置加载 + RspecRunner（`{specFiles}` 展开、目录分组）|
+| `verify/rspec-scope.ts` | 镜像 spec 映射 + 类名引用扫描 + 上限回退 |
+| `verify/rspec-parse.ts` | rspec JSON 噪音提取 + spec 文件级聚合 + 加载崩语义 |
 | `extract/parser.ts` | 按语言的 tree-sitter parser 单例 getParser（getRustParser 为薄包装,pick-site.ts 沿用）|
-| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：优先 tree-sitter 好语句、regex 兜底）|
-| `verify/pick-site.ts` | pickPreferredSite：tree-sitter 挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail |
+| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：语言感知 Rust/Ruby，优先 tree-sitter 好语句、regex 兜底）|
+| `verify/pick-site.ts` | pickPreferredSite：语言感知（Rust/Ruby）挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail；Ruby 侧含 heredoc 排除（注释会孤儿化 heredoc 体）|
 | `verify/probe.ts` | 爆炸半径探针（基线→突变→跑→diff→还原）|
 | `verify/judge.ts` | 判定预测 vs 真实爆炸半径 |
 | `interpret/input.ts` | 解读喂料:整文件源码+确定性事实,contentHash(含 PROMPT_VERSION)|
@@ -121,7 +127,7 @@ npm run serve -- --out <chatwoot-out> --port 4872
 3. ~~**更聪明的突变位点**~~ ✅ 已完成（分支 feat/smarter-mutation-site，见 `docs/superpowers/plans/2026-07-07-smarter-mutation-site.md`）。`chooseMutation` 改成 async 编排器：先用 tree-sitter 挑"好语句"（赋值/复合赋值/裸调用，含 `?`/`.await`/括号包装下钻），注释后大概率某测试变红而非编译崩；挑不到回退现有 regex 扫描（绝不退步）。顺手抽了共享 `getRustParser`。`withMutation` 还原逻辑一行未动。
 4. ~~**web viewer**~~ ✅ 已完成（分支 feat/web-viewer，见 `docs/superpowers/plans/2026-07-07-web-viewer.md`）。`npm run serve` 起本地 viewer:点亮地图 + 固定"下一步"卡片 + 页面标记已理解（写同一份 progress.json）+ 亮暗主题。已在真实 umwelt-bevy 上浏览器冒烟通过（68 块渲染/点块切卡/标记联动/主题切换/错误路径,零控制台错误）。
 5. ~~**Ruby 映射（多语言子项目①，学 chatwoot）**~~ ✅ 已完成（分支 feat/ruby-mapping，见 `docs/superpowers/plans/2026-07-08-ruby-mapping.md`）。语言注册表（`extract/lang.ts`,加语言=加一项）+ 通用叶子提取 + `--include` 目录过滤 + 标签围栏按语言 + verify 非 Rust 友好拒绝。真实 chatwoot 冒烟通过（`--include app` → 738 块/167 章/4780 方法,风险四桶均匀;`conversation.rb` 评 high:high/40 方法,与领域常识吻合;umwelt-bevy 回归 68 块+标签缓存原封不动）。**遗留**:chatwoot 标签还没打（跑冒烟时环境无 DEEPSEEK_API_KEY;设好后重跑 map 即可,738 次调用一次性成本）。
-6. **rspec 突变探针（多语言子项目②）**：verify 对 Ruby 的真实爆炸半径。**前置**:本机无 Ruby/Postgres/Redis,只有 Docker——需先用 Docker 立起 chatwoot 测试环境（首次构建很重）,再勘察 rspec 输出解析/目标 spec 选择（按 Rails 惯例 app/models/user.rb → spec/models/user_spec.rb,不能全量跑）,然后独立 brainstorm→spec→plan。
+6. ~~**rspec 突变探针（多语言子项目②）**~~ ✅ 已完成（分支 feat/rspec-probe，见 `docs/superpowers/plans/2026-07-12-rspec-probe.md`）。VerifyRunner 接口按语言分发（CargoRunner 纯搬运 + RspecRunner）;范围=镜像 spec+类名引用扫描（超上限回退）;预测粒度=spec 文件级;环境=仓级 `easyreview.runner.json` 命令模板+Docker Compose 配方（`docs/recipes/chatwoot-rspec.md`）。真仓验收通过（chatwoot:突变 `include UrlHelper` → 镜像 spec 红/controller spec 绿,预测命中→verified;真实仓零接触）。
 7. **Vue/JS 提取**：注册表加项即可（tree-sitter-wasms 已含 vue/javascript/typescript 语法）,但要过规模关（chatwoot .vue 1092 + .js 1022）与"Vue SFC 里 script 块"的提取策略。
 
 ## 一些工作方式上值得记住的经验

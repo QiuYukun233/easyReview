@@ -155,4 +155,124 @@ describe('verify show/predict', () => {
 
     runVerifyClean(dir); // 沙箱已不存在——幂等,不抛
   });
+
+  it('ruby chunk: show/predict run rspec via runner config at file-level granularity', async () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    const sb = trackSandbox(dir);
+    writeRepoFile(dir, 'app/actions/contact_identify_action.rb',
+      'class ContactIdentifyAction\n  def perform\n    @contact = find_contact\n  end\nend\n');
+    writeRepoFile(dir, 'spec/actions/contact_identify_action_spec.rb', 'describe ContactIdentifyAction do end');
+    writeRepoFile(dir, 'spec/services/consumer_spec.rb', 'x = ContactIdentifyAction.new');
+    writeRepoFile(dir, 'easyreview.runner.json', JSON.stringify({ version: 1, ruby: { cmd: ['fake-rspec', '{specFiles}'] } }));
+    commitAll(dir, 'init');
+    await runMap({ repo: dir, outDir: dir });
+
+    const chunkId = 'app/actions/contact_identify_action.rb';
+    const mirror = 'spec/actions/contact_identify_action_spec.rb';
+    const consumer = 'spec/services/consumer_spec.rb';
+    const okJson = JSON.stringify({ examples: [
+      { file_path: `./${mirror}`, status: 'passed' },
+      { file_path: `./${consumer}`, status: 'passed' },
+    ], summary: {} });
+    const failJson = JSON.stringify({ examples: [
+      { file_path: `./${mirror}`, status: 'failed' },
+      { file_path: `./${consumer}`, status: 'passed' },
+    ], summary: {} });
+
+    let phase = 'baseline';
+    let seen: { cmd?: string; args?: string[]; cwd?: string } = {};
+    const fakeExec = async (cmd: string, args: string[], cwd: string) => {
+      seen = { cmd, args, cwd };
+      return phase === 'baseline' ? `noise\n${okJson}` : `noise\n${failJson}`;
+    };
+
+    await runVerifyShow({ repo: dir, outDir: dir, chunkId, exec: fakeExec });
+    expect(seen.cmd).toBe('fake-rspec');
+    expect(seen.args).toEqual([mirror, consumer]);
+    expect(seen.cwd).toBe(sb.srcDir);
+    const baseline = JSON.parse(readFileSync(join(dir, 'easyreview.verify-baseline.json'), 'utf8'));
+    expect(baseline.scope.specFiles).toEqual([mirror, consumer]);
+    const show = readFileSync(join(dir, 'easyreview.verify.md'), 'utf8');
+    expect(show).toContain('相关 spec 文件');
+    expect(show).toContain(mirror);
+    expect(show).toContain('spec 文件路径');
+
+    phase = 'mutated';
+    await runVerifyPredict({ repo: dir, outDir: dir, chunkId, predicted: [mirror], exec: fakeExec });
+    const verdict = readFileSync(join(dir, 'easyreview.verify.md'), 'utf8');
+    expect(verdict).toContain('通过');
+    const progress = JSON.parse(readFileSync(join(dir, 'easyreview.progress.json'), 'utf8'));
+    expect(progress.verified).toContain(chunkId);
+  });
+
+  it('ruby compileBroke: mutated run yields no rspec JSON → spec 套件加载失败文案(非 rust 文案)', async () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    trackSandbox(dir);
+    writeRepoFile(dir, 'app/actions/contact_identify_action.rb',
+      'class ContactIdentifyAction\n  def perform\n    @contact = find_contact\n  end\nend\n');
+    writeRepoFile(dir, 'spec/actions/contact_identify_action_spec.rb', 'describe ContactIdentifyAction do end');
+    writeRepoFile(dir, 'easyreview.runner.json', JSON.stringify({ version: 1, ruby: { cmd: ['fake-rspec', '{specFiles}'] } }));
+    commitAll(dir, 'init');
+    await runMap({ repo: dir, outDir: dir });
+
+    const chunkId = 'app/actions/contact_identify_action.rb';
+    const mirror = 'spec/actions/contact_identify_action_spec.rb';
+    const okJson = JSON.stringify({ examples: [
+      { file_path: `./${mirror}`, status: 'passed' },
+    ], summary: {} });
+
+    let phase = 'baseline';
+    const fakeExec = async (_cmd: string, _args: string[], _cwd: string) =>
+      phase === 'baseline' ? `noise\n${okJson}` : 'NameError: uninitialized constant Foo';
+
+    await runVerifyShow({ repo: dir, outDir: dir, chunkId, exec: fakeExec });
+    phase = 'mutated';
+    // 注:judge 对 compileBroke 的既有约定是「预测非空即通过」(预测到任何爆炸=知道这行承重),
+    // 所以要走未通过路径必须空预测——预测错误文件反而会通过。
+    await runVerifyPredict({ repo: dir, outDir: dir, chunkId, predicted: [], exec: fakeExec });
+    const verdict = readFileSync(join(dir, 'easyreview.verify.md'), 'utf8');
+    expect(verdict).toContain('spec 套件');
+    expect(verdict).toContain('加载失败');
+    expect(verdict).not.toContain('无法编译');
+    expect(verdict).toContain('未通过');
+    expect(existsSync(join(dir, 'easyreview.progress.json'))).toBe(false);
+  });
+
+  it('ruby uncovered: mutation flips nothing → 无法验证,不标 verified', async () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    trackSandbox(dir);
+    writeRepoFile(dir, 'app/actions/contact_identify_action.rb',
+      'class ContactIdentifyAction\n  def perform\n    @contact = find_contact\n  end\nend\n');
+    writeRepoFile(dir, 'spec/actions/contact_identify_action_spec.rb', 'describe ContactIdentifyAction do end');
+    writeRepoFile(dir, 'easyreview.runner.json', JSON.stringify({ version: 1, ruby: { cmd: ['fake-rspec', '{specFiles}'] } }));
+    commitAll(dir, 'init');
+    await runMap({ repo: dir, outDir: dir });
+
+    const chunkId = 'app/actions/contact_identify_action.rb';
+    const mirror = 'spec/actions/contact_identify_action_spec.rb';
+    const okJson = JSON.stringify({ examples: [
+      { file_path: `./${mirror}`, status: 'passed' },
+    ], summary: {} });
+
+    const fakeExec = async (_cmd: string, _args: string[], _cwd: string) => `noise\n${okJson}`;
+
+    await runVerifyShow({ repo: dir, outDir: dir, chunkId, exec: fakeExec });
+    await runVerifyPredict({ repo: dir, outDir: dir, chunkId, predicted: [mirror], exec: fakeExec });
+    const verdict = readFileSync(join(dir, 'easyreview.verify.md'), 'utf8');
+    expect(verdict).toContain('无法验证');
+    expect(verdict).toContain('没被测试覆盖');
+    expect(existsSync(join(dir, 'easyreview.progress.json'))).toBe(false);
+  });
+
+  it('ruby chunk without runner config → actionable error', async () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    trackSandbox(dir);
+    writeRepoFile(dir, 'app/models/thing.rb', 'class Thing\n  def go\n    x = 1\n  end\nend\n');
+    writeRepoFile(dir, 'spec/models/thing_spec.rb', 'describe Thing do end');
+    commitAll(dir, 'init');
+    await runMap({ repo: dir, outDir: dir });
+    await expect(
+      runVerifyShow({ repo: dir, outDir: dir, chunkId: 'app/models/thing.rb', exec: async () => '' }),
+    ).rejects.toThrow(/easyreview\.runner\.json/);
+  });
 });

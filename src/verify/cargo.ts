@@ -5,7 +5,7 @@ import { parseCargoTest } from './parse.js';
 /** (cmd, args, cwd, env?) → 合并的 stdout+stderr。不因非零退出码抛出。env 缺省=继承进程环境。 */
 export type Exec = (cmd: string, args: string[], cwd: string, env?: NodeJS.ProcessEnv) => Promise<string>;
 
-const realExec: Exec = (cmd, args, cwd, env) =>
+export const realExec: Exec = (cmd, args, cwd, env) =>
   new Promise((resolve) => {
     execFile(cmd, args, { cwd, maxBuffer: 64 * 1024 * 1024, env: env ?? process.env }, (_err, stdout, stderr) => {
       resolve(`${stdout ?? ''}\n${stderr ?? ''}`);
