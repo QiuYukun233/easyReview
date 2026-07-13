@@ -52,4 +52,24 @@ describe('extractLeaves for Vue SFC', () => {
     const leaves = await extractLeaves('w/Pure.vue', '<template>\n  <div />\n</template>\n', VUE);
     expect(leaves).toEqual([]);
   });
+
+  it('dual <script> blocks: leaves from both segments, offsets independent', async () => {
+    const sfc = [
+      '<script>',               // L1
+      'function legacy() {',    // L2
+      '  return 1;',            // L3
+      '}',                      // L4
+      '</script>',              // L5
+      '<script setup>',         // L6
+      'const modern = () => 2;',// L7
+      '</script>',              // L8
+      '',
+    ].join('\n');
+    const leaves = await extractLeaves('w/Dual.vue', sfc, VUE);
+    const byName = Object.fromEntries(leaves.map((l) => [l.name, l]));
+    expect(Object.keys(byName).sort()).toEqual(['legacy', 'modern']);
+    expect(byName['legacy'].startLine).toBe(2);
+    expect(byName['legacy'].endLine).toBe(4);
+    expect(byName['modern'].startLine).toBe(7);
+  });
 });
