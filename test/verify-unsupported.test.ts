@@ -2,6 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { makeTempRepo, writeRepoFile, commitAll } from './helpers.js';
 import { runMap } from '../src/cli.js';
 import { runVerifyShow, runVerifyPredict } from '../src/cli-verify.js';
+import { sandboxFor } from '../src/verify/sandbox.js';
+import { existsSync, rmSync } from 'node:fs';
 
 let cleanups: Array<() => void> = [];
 afterEach(() => { cleanups.forEach((c) => c()); cleanups = []; });
@@ -11,6 +13,8 @@ afterEach(() => { cleanups.forEach((c) => c()); cleanups = []; });
 describe('verify rejects vue/js chunks up front', () => {
   async function setup() {
     const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    const sb = sandboxFor(dir);
+    cleanups.push(() => rmSync(sb.dir, { recursive: true, force: true }));
     writeRepoFile(dir, 'app/javascript/widget/App.vue',
       '<template><div /></template>\n<script setup>\nconst go = () => 1;\n</script>\n');
     writeRepoFile(dir, 'app/javascript/helper/url.js', 'export const make = () => 2;\n');
@@ -27,6 +31,7 @@ describe('verify rejects vue/js chunks up front', () => {
         exec: async () => { execCalled = true; return ''; } }),
     ).rejects.toThrow(/不在支持范围/);
     expect(execCalled).toBe(false);
+    expect(existsSync(sandboxFor(dir).dir)).toBe(false); // 拒绝在建沙箱之前——零磁盘副作用
   });
 
   it('js chunk: predict rejected the same way', async () => {
@@ -37,5 +42,6 @@ describe('verify rejects vue/js chunks up front', () => {
         predicted: ['whatever'], exec: async () => { execCalled = true; return ''; } }),
     ).rejects.toThrow(/不在支持范围/);
     expect(execCalled).toBe(false);
+    expect(existsSync(sandboxFor(dir).dir)).toBe(false); // 拒绝在建沙箱之前——零磁盘副作用
   });
 });
