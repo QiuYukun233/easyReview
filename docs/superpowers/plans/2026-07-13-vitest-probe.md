@@ -658,6 +658,12 @@ carve 区段 row>0 的行与真实文件行逐字节相同,original 取自 fullL
 Run: `npx vitest run test/pick-site-js.test.ts test/pick-site-ruby.test.ts test/choose-mutation.test.ts && npm test`
 Expected: 全 PASS(rust/ruby 路径行为不变:minRow=0 是恒真过滤)
 
+> **修订(2026-07-13,质量评审 Critical,实测复现):** minRow 方案漏了闭标签对称面——
+> `foo();</script>` 同行时区段末行也是半行,fullLines[row] 带着 `</script>` 返回,注释整行会弄坏 SFC。
+> 修法升级为**字节一致性守卫**:pickInSource 去掉 minRow、返回排序候选数组(firstSiteOf→sitesOf),
+> carve 分支逐候选校验 `fullLines[row] === site.original` 才采纳——开标签行剩余/闭标签同行/一切
+> 半行情形统一被挡。补三用例:闭标签同行回归、双 script 第二段命中、多行属性开标签端到端。
+
 - [ ] **Step 5: Commit**
 
 ```bash
