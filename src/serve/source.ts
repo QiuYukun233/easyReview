@@ -1,14 +1,14 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { GradedTree } from '../types.js';
-import { langOf } from '../extract/lang.js';
+import { langOf, type LangSpec } from '../extract/lang.js';
 import { highlightLines } from './highlight.js';
 
 export interface SourceBody {
   ok: boolean;
   error?: string;
   file?: string;
-  lang?: 'rust' | 'ruby' | null;
+  lang?: LangSpec['id'] | null;
   lines?: string[]; // 逐行已转义+已高亮的 HTML
 }
 

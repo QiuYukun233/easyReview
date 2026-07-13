@@ -6,7 +6,7 @@ describe('langOf', () => {
     expect(langOf('crates/foo/src/lib.rs')).toBe(RUST);
     expect(langOf('app/models/user.rb')).toBe(RUBY);
     expect(langOf('README.md')).toBeNull();
-    expect(langOf('a.vue')).toBeNull();          // 本轮未注册
+    expect(langOf('a.vue')?.id).toBe('vue');     // 2026-07-13 起已注册(Vue/JS 提取)
   });
 
   it('carries fence tags for label prompts', () => {
