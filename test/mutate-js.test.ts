@@ -76,6 +76,18 @@ describe('chooseMutation (js)', () => {
     expect(await chooseMutation(chunk, leaves(1, 5), src)).toBeNull();
   });
 
+  it('regex fallback never picks multi-line ternary branch lines (: value;)', async () => {
+    const { chunk, leaves } = mk('app/javascript/helper/ternary.js');
+    const src = [
+      'export function pick(isActive) {',  // 1
+      '  const text = isActive',           // 2  跨行 lexical_declaration,tree-sitter 不命中
+      '    ? activeLabel',                 // 3  ? 开头,不以 ; 结尾,本就不选
+      '    : inactiveLabel;',              // 4  : 开头以 ; 结尾——绝不能选
+      '}',                                 // 5
+    ].join('\n');
+    expect(await chooseMutation(chunk, leaves(1, 5), src)).toBeNull();
+  });
+
   it('vue regex fallback stays inside the script region (真正走回退路径)', async () => {
     const { chunk } = mk('app/javascript/widget/Decl.vue');
     // script 里只有声明,tree-sitter 无候选 → regex 回退;唯一 ; 结尾的安全行是声明行

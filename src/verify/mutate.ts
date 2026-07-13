@@ -44,12 +44,14 @@ function isCommentableRuby(line: string): boolean {
 }
 
 /** JS/Vue regex 回退:只要完整单行语句(以 ; 结尾);含反引号的行保守跳过——
- *  regex 层判不了模板串上下文。已知局限:多行模板串的内部行若不含反引号且以 ; 结尾
- *  仍可能被选中(注释它只是改字符串内容,不破坏语法,最坏 uncovered 兜底)。 */
+ *  regex 层判不了模板串上下文。
+ *  已知局限:①多行模板串的内部行若不含反引号且以 ; 结尾仍可能被选中(只改字符串内容,
+ *  无害,最坏 uncovered 兜底);②尾随运算符续行(`a +` 换行后的 `b;`)以标识符开头,
+ *  前缀守卫原理上区分不了,注释它是语法破坏(假红)——这正是 tree-sitter 作首选路径的原因。 */
 function isCommentableJs(line: string): boolean {
   const t = line.trim();
   if (t === '' || t.startsWith('//') || t.startsWith('/*') || t.startsWith('*')) return false;
-  if (t.startsWith('}') || t.startsWith(']') || t.startsWith(')')) return false; // 对象/数组/多行调用的收尾行(对齐 isCommentableRust 的 } 守卫)
+  if (t.startsWith('}') || t.startsWith(']') || t.startsWith(')') || t.startsWith('?') || t.startsWith(':')) return false; // 收尾行/多行三元分支行(前缀可守卫类到此穷尽;对齐 isCommentableRust 的 } 守卫)
   if (!t.endsWith(';')) return false;
   if (t.includes('`')) return false;
   return true;
