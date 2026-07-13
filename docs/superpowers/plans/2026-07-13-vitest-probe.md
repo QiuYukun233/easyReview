@@ -237,6 +237,11 @@ describe('pickVitestScope', () => {
 });
 ```
 
+> **修订(2026-07-13,质量评审 Important):** 成功路径也必须给 `scanNote`(命中 N 个/零命中),
+> 与 rspec-scope"永远有诊断行"同构——本计划原版把成功路径的 note 留空(`toBeUndefined` 断言)是
+> 对设计 §4"完全同构"的漂移。测试期望随之改为断言 note 内容;另补 walkSpecs 排除诱饵/.test.js
+> 端到端/scanLimit 恰好边界三用例,commonPrefixLen 改为只比目录段(显式化"扩展名总不同"不变量)。
+
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run test/vitest-scope.test.ts`
