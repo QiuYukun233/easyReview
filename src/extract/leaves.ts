@@ -12,24 +12,28 @@ export async function extractLeaves(file: string, source: string, spec: LangSpec
     query = lang.query(spec.query);
     queries.set(spec.id, query);
   }
-  const tree = parser.parse(source);
+  // carve：parse 前区段切取（Vue 切 <script> 块）；缺省 = 整文件一个区段
+  const segments = spec.carve ? spec.carve(source) : [{ source, lineOffset: 0 }];
   const leaves: Leaf[] = [];
-  for (const m of query.matches(tree.rootNode)) {
-    const fnNode = m.captures.find((c) => c.name === 'fn')!.node;
-    const nameNode = m.captures.find((c) => c.name === 'name')!.node;
-    const startLine = fnNode.startPosition.row + 1;
-    const endLine = fnNode.endPosition.row + 1;
-    const name = nameNode.text;
-    leaves.push({
-      id: `${file}::${name}::${startLine}`,
-      kind: 'fn',
-      name,
-      file,
-      startLine,
-      endLine,
-      loc: endLine - startLine + 1,
-    });
+  for (const seg of segments) {
+    const tree = parser.parse(seg.source);
+    for (const m of query.matches(tree.rootNode)) {
+      const fnNode = m.captures.find((c) => c.name === 'fn')!.node;
+      const nameNode = m.captures.find((c) => c.name === 'name')!.node;
+      const startLine = fnNode.startPosition.row + 1 + seg.lineOffset;
+      const endLine = fnNode.endPosition.row + 1 + seg.lineOffset;
+      const name = nameNode.text;
+      leaves.push({
+        id: `${file}::${name}::${startLine}`,
+        kind: 'fn',
+        name,
+        file,
+        startLine,
+        endLine,
+        loc: endLine - startLine + 1,
+      });
+    }
+    tree.delete();
   }
-  tree.delete();
   return leaves;
 }
