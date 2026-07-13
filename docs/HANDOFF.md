@@ -18,7 +18,7 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **52 文件 / 188 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
+- **56 文件 / 211 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
@@ -60,7 +60,7 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 npm run map   -- --repo E:/learning/agent-research/repos/chatwoot --include app --out <chatwoot-out>
 npm run learn -- --out <chatwoot-out>
 npm run serve -- --out <chatwoot-out> --port 4872
-#   → 章按 Rails 布局自动切（app:models、app:controllers/...）；verify 已支持 Ruby 块（rspec 探针,2026-07-12;无 easyreview.runner.json 时给可操作报错）
+#   → 章按 Rails 布局自动切（app:models、app:controllers/...）；verify 已支持 Ruby 块（rspec 探针,2026-07-12;无 easyreview.runner.json 时给可操作报错）;2026-07-13 起同一命令连前端一起进地图（app/javascript 的 .vue/.js，测试文件除外）
 
 # ④ web viewer：npm run serve -- --out . [--port 4870] → http://localhost:4870
 #   → 点亮地图（风险×贡献度网格,灰/绿/绿框=verified/黄=下一步）+ 右侧固定"下一步"卡片
@@ -77,10 +77,11 @@ npm run serve -- --out <chatwoot-out> --port 4872
 |---|---|
 | `types.ts` | 所有共享类型（三层树、Grade、JourneyPath、Progress、验证类型）|
 | `git.ts` | git 封装（listTrackedFiles、logNameOnly）|
-| `extract/lang.ts` | 语言注册表（rust+ruby：扩展名/wasm/叶子query/围栏）+ langOf/inScope（加语言=加一项）|
+| `extract/lang.ts` | 语言注册表（rust+ruby+js+vue：扩展名/wasm/叶子query/围栏 + 可选 carve 区段切取/exclude 测试排除）+ langOf/inScope（加语言=加一项）|
+| `extract/carve-vue.ts` | Vue SFC <script> 区段切取（regex 定位、lineOffset 还原真实行号；已知边界:字符串/HTML注释里的 </script> 会切早，接受）|
 | `extract/leaves.ts` | 通用 tree-sitter 叶子提取（query 按语言编译一次、tree 每次释放）|
 | `extract/tree.ts` | 组装三层树（章=crate 或顶层目录/子目录，块=文件，叶=函数/方法；--include 前缀过滤）|
-| `grade/{churn,coupling,ownership,centrality}.ts` | 四个信号（0..1，归一化）|
+| `grade/{churn,coupling,ownership,centrality}.ts` | 四个信号（0..1，归一化）（中心度已分词化——建表 O(总字符数)+查表 Map.get,2026-07-13;非词字符名回退旧正则是仅存慢路径）|
 | `grade/grade.ts` | 复合两轴 + 分位分桶（min→0/max→1 位置百分位）|
 | `render/map-md.ts` | 风险×贡献度地图（可选 understood 点亮 ✓）|
 | `path/sequence.ts` | 学习路径排序（难度=0.5贡献+0.3风险+0.2size；章内连续；觅食邻居）|
@@ -128,7 +129,7 @@ npm run serve -- --out <chatwoot-out> --port 4872
 4. ~~**web viewer**~~ ✅ 已完成（分支 feat/web-viewer，见 `docs/superpowers/plans/2026-07-07-web-viewer.md`）。`npm run serve` 起本地 viewer:点亮地图 + 固定"下一步"卡片 + 页面标记已理解（写同一份 progress.json）+ 亮暗主题。已在真实 umwelt-bevy 上浏览器冒烟通过（68 块渲染/点块切卡/标记联动/主题切换/错误路径,零控制台错误）。
 5. ~~**Ruby 映射（多语言子项目①，学 chatwoot）**~~ ✅ 已完成（分支 feat/ruby-mapping，见 `docs/superpowers/plans/2026-07-08-ruby-mapping.md`）。语言注册表（`extract/lang.ts`,加语言=加一项）+ 通用叶子提取 + `--include` 目录过滤 + 标签围栏按语言 + verify 非 Rust 友好拒绝。真实 chatwoot 冒烟通过（`--include app` → 738 块/167 章/4780 方法,风险四桶均匀;`conversation.rb` 评 high:high/40 方法,与领域常识吻合;umwelt-bevy 回归 68 块+标签缓存原封不动）。**遗留**:chatwoot 标签还没打（跑冒烟时环境无 DEEPSEEK_API_KEY;设好后重跑 map 即可,738 次调用一次性成本）。
 6. ~~**rspec 突变探针（多语言子项目②）**~~ ✅ 已完成（分支 feat/rspec-probe，见 `docs/superpowers/plans/2026-07-12-rspec-probe.md`）。VerifyRunner 接口按语言分发（CargoRunner 纯搬运 + RspecRunner）;范围=镜像 spec+类名引用扫描（超上限回退）;预测粒度=spec 文件级;环境=仓级 `easyreview.runner.json` 命令模板+Docker Compose 配方（`docs/recipes/chatwoot-rspec.md`）。真仓验收通过（chatwoot:突变 `include UrlHelper` → 镜像 spec 红/controller spec 绿,预测命中→verified;真实仓零接触）。
-7. **Vue/JS 提取**：注册表加项即可（tree-sitter-wasms 已含 vue/javascript/typescript 语法）,但要过规模关（chatwoot .vue 1092 + .js 1022）与"Vue SFC 里 script 块"的提取策略。
+7. ~~**Vue/JS 提取**~~ ✅ 已完成（分支 feat/vue-js-extraction，见 `docs/superpowers/plans/2026-07-13-vue-js-extraction.md`）。注册表加 js/vue 两项（LangSpec 新增可选 carve 区段切取/exclude 排除，JS 查询五形态实测定稿）;Vue SFC 切 <script> 区段、叶子行号指向真实文件;测试文件（*.spec.js/*.test.js/specs//__tests__/）不进地图;中心度分词化过规模关（2800 文件×1.2 万名字约几秒;非词字符名~13% 走旧正则回退，将来可做词干+后缀专用分词）;verify 对 vue/js 前置友好拒绝（零磁盘副作用有显式断言）。
 
 ## 一些工作方式上值得记住的经验
 
