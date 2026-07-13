@@ -77,4 +77,13 @@ describe('nameFanInCentrality tokenized rewrite', () => {
     const sources = { 'a.js': 'nowhere()', 'b.js': 'unrelated()' };
     expect(nameFanInCentrality(leaves, sources)).toEqual({});
   });
+
+  it('names with $ or unicode chars stay equivalent via fallback (WORD must mirror \\w)', () => {
+    const leaves = [leaf('u.js', 'get$ref'), leaf('v.js', 'café')];
+    const sources: Record<string, string> = {
+      'u.js': 'café(); get$ref();',
+      'v.js': 'get$ref(); get$ref; x = café + caféx; get$refx();',
+    };
+    expect(nameFanInCentrality(leaves, sources)).toEqual(naiveReference(leaves, sources));
+  });
 });
