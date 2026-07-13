@@ -8,7 +8,7 @@ export interface SourceBody {
   ok: boolean;
   error?: string;
   file?: string;
-  lang?: 'rust' | 'ruby' | null;
+  lang?: 'rust' | 'ruby' | 'js' | 'vue' | null;
   lines?: string[]; // 逐行已转义+已高亮的 HTML
 }
 
