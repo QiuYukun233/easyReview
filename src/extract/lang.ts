@@ -28,15 +28,19 @@ export const RUBY: LangSpec = {
   fence: 'ruby',
 };
 
-// 实测（2026-07-13，对真实 tree-sitter-javascript.wasm）：五种形态覆盖 chatwoot 实际代码
+// 实测（2026-07-13，对真实 tree-sitter-javascript.wasm）：六种形态覆盖 chatwoot 实际代码
 // （function 声明含 generator / const 绑定箭头与函数表达式 / 对象与 class 的 shorthand 方法 /
-//   pair 属性值为箭头或函数表达式）；export 外层包装不挡匹配；匿名回调与解构不被捕获。
+//   pair 属性值为箭头或函数表达式 / const 绑定"标识符调用含函数实参"——computed/watch/debounce
+//   这类包装,通用规则不设白名单,setTimeout 型绑定也收,是接受的代价）；
+//   export 外层包装不挡匹配；匿名回调、解构、成员表达式调用（_.debounce）不被捕获；
+//   多函数实参只产一条匹配,嵌套 declarator 内外各成一叶。
 const JS_QUERY = [
   '(function_declaration name: (identifier) @name) @fn',
   '(generator_function_declaration name: (identifier) @name) @fn',
   '(variable_declarator name: (identifier) @name value: [(arrow_function) (function_expression)]) @fn',
   '(method_definition name: (property_identifier) @name) @fn',
   '(pair key: (property_identifier) @name value: [(arrow_function) (function_expression)]) @fn',
+  '(variable_declarator name: (identifier) @name value: (call_expression function: (identifier) arguments: (arguments [(arrow_function) (function_expression)]))) @fn',
 ].join('\n');
 
 // 测试文件不进学习地图（与 Rails 侧 spec/ 被 --include app 天然排除对称）
