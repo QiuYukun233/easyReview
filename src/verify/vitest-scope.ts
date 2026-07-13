@@ -4,6 +4,7 @@ import { join } from 'node:path';
 export interface VitestScope { specFiles: string[]; scanNote?: string; }
 
 const SPEC_RE = /\.(spec|test)\.js$/;
+// 与 verify/sandbox.ts 的 EXCLUDED_DIRS 同一排除集
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'target']);
 
 /** 收集仓内全部 *.spec.js / *.test.js(仓相对、正斜杠)。 */
@@ -36,10 +37,12 @@ export function mirrorSpecOf(chunkFile: string, specs: string[]): string | null 
     .filter((s) => { const m = s.split('/').pop()!.match(/^(.*)\.(spec|test)\.js$/); return m?.[1] === base; })
     .sort();
   if (candidates.length === 0) return null;
+  const dirOf = (p: string) => p.split('/').slice(0, -1).join('/');
+  const srcDir = dirOf(chunkFile);
   let best = candidates[0];
-  let bestLen = commonPrefixLen(chunkFile, best);
+  let bestLen = commonPrefixLen(srcDir, dirOf(best));
   for (const c of candidates.slice(1)) {
-    const len = commonPrefixLen(chunkFile, c);
+    const len = commonPrefixLen(srcDir, dirOf(c));
     if (len > bestLen) { best = c; bestLen = len; }
   }
   return best;
@@ -51,6 +54,7 @@ export function pickVitestScope(repo: string, chunkFile: string, scanLimit: numb
   const specs = walkSpecs(repo);
   const mirror = mirrorSpecOf(chunkFile, specs);
   const base = baseOf(chunkFile).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // basename 已转义;JS/Vue 文件名首尾是词字符(字母/数字/_),\b 语义安全
   const re = new RegExp(`\\b${base}\\b`);
   const hits: string[] = [];
   for (const s of specs) {
@@ -63,5 +67,8 @@ export function pickVitestScope(repo: string, chunkFile: string, scanLimit: numb
   }
   const specFiles = [...(mirror ? [mirror] : []), ...hits.sort()];
   if (specFiles.length === 0) return null;
-  return { specFiles };
+  const scanNote = hits.length > 0
+    ? `引用扫描命中 ${hits.length} 个 spec(已并入)。`
+    : '引用扫描零命中——只跑镜像 spec。';
+  return { specFiles, scanNote };
 }

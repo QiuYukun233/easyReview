@@ -57,7 +57,7 @@ describe('pickVitestScope', () => {
       'app/javascript/helper/specs/url.spec.js',
       'app/javascript/other/specs/nav.spec.js',
     ]);
-    expect(scope.scanNote).toBeUndefined();
+    expect(scope.scanNote).toMatch(/命中 1 个/);
   });
 
   it('scan over limit → mirror-only with explicit note', () => {
@@ -86,5 +86,33 @@ describe('pickVitestScope', () => {
     writeRepoFile(dir, 'app/javascript/x/specs/net.spec.js', 'const c = curl();');
     const scope = pickVitestScope(dir, 'app/javascript/helper/url.js', 20)!;
     expect(scope.specFiles).toEqual(['app/javascript/helper/specs/url.spec.js']);
+    expect(scope.scanNote).toMatch(/零命中/);
+  });
+
+  it('walkSpecs ignores decoy specs inside node_modules/.git', () => {
+    const dir = setup();
+    writeRepoFile(dir, 'app/javascript/a/specs/real.spec.js', 'x');
+    writeRepoFile(dir, 'node_modules/pkg/fake.spec.js', 'x');
+    writeRepoFile(dir, 'app/javascript/b/decoy.test.js', 'x');
+    const scope = pickVitestScope(dir, 'app/javascript/a/real.js', 20)!;
+    expect(scope.specFiles).toEqual(['app/javascript/a/specs/real.spec.js']);
+  });
+
+  it('.test.js mirror works end to end', () => {
+    const dir = setup();
+    writeRepoFile(dir, 'app/javascript/a/thing.js', 'export const t = 1;');
+    writeRepoFile(dir, 'app/javascript/a/__tests__/thing.test.js', 'mirror');
+    const scope = pickVitestScope(dir, 'app/javascript/a/thing.js', 20)!;
+    expect(scope.specFiles).toEqual(['app/javascript/a/__tests__/thing.test.js']);
+  });
+
+  it('hits exactly at scanLimit: merged, no fallback', () => {
+    const dir = setup();
+    writeRepoFile(dir, 'app/javascript/a/edge.js', 'export const e = 1;');
+    writeRepoFile(dir, 'app/javascript/a/specs/edge.spec.js', 'mirror');
+    for (let i = 0; i < 3; i++) writeRepoFile(dir, `app/javascript/x/specs/e${i}.spec.js`, 'edge used');
+    const scope = pickVitestScope(dir, 'app/javascript/a/edge.js', 3)!;
+    expect(scope.specFiles).toHaveLength(4);
+    expect(scope.scanNote).toMatch(/命中 3 个/);
   });
 });
