@@ -49,7 +49,7 @@ function isCommentableRuby(line: string): boolean {
 function isCommentableJs(line: string): boolean {
   const t = line.trim();
   if (t === '' || t.startsWith('//') || t.startsWith('/*') || t.startsWith('*')) return false;
-  if (t.startsWith('}') || t.startsWith(']')) return false; // 对象/数组字面量、块的收尾行(对齐 isCommentableRust 的 } 守卫)
+  if (t.startsWith('}') || t.startsWith(']') || t.startsWith(')')) return false; // 对象/数组/多行调用的收尾行(对齐 isCommentableRust 的 } 守卫)
   if (!t.endsWith(';')) return false;
   if (t.includes('`')) return false;
   return true;

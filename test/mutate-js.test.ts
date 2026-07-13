@@ -64,6 +64,18 @@ describe('chooseMutation (js)', () => {
     expect(op).toBeNull(); // 该范围内没有任何安全可注释行
   });
 
+  it('regex fallback never picks multi-line call closers ());)', async () => {
+    const { chunk, leaves } = mk('app/javascript/store/dispatcher.js');
+    const src = [
+      'export function f(store) {',    // 1
+      '  store.dispatch(',             // 2  多行调用——tree-sitter 单行过滤不命中
+      '    "conversation/fetch",',     // 3  以 , 结尾,不选
+      '  );',                          // 4  闭括号行——绝不能选
+      '}',                             // 5
+    ].join('\n');
+    expect(await chooseMutation(chunk, leaves(1, 5), src)).toBeNull();
+  });
+
   it('vue regex fallback stays inside the script region (真正走回退路径)', async () => {
     const { chunk } = mk('app/javascript/widget/Decl.vue');
     // script 里只有声明,tree-sitter 无候选 → regex 回退;唯一 ; 结尾的安全行是声明行
@@ -72,13 +84,16 @@ describe('chooseMutation (js)', () => {
       '  <div>{{ label }}</div>',   // 2
       '</template>',                // 3
       '<script setup>',             // 4
-      'const label = makeLabel;',   // 5  ← 回退应选这行(叶子范围内、; 结尾、无反引号)
-      '</script>',                  // 6
+      'const label = computed(',    // 5  多行调用,tree-sitter 单行过滤不命中
+      '  () => makeLabel,',         // 6
+      ');',                         // 7  闭括号——新守卫拒绝
+      'const alt = makeAlt;',       // 8  ← 回退应选这行
+      '</script>',                  // 9
     ].join('\n');
-    const vueLeaves: Leaf[] = [{ id: 'l', kind: 'fn', name: 'label', file: chunk.file, startLine: 5, endLine: 5, loc: 3 }];
+    const vueLeaves: Leaf[] = [{ id: 'l', kind: 'fn', name: 'label', file: chunk.file, startLine: 5, endLine: 8, loc: 4 }];
     const op = (await chooseMutation(chunk, vueLeaves, sfc))!;
-    expect(op.line).toBe(5);
-    expect(op.mutated).toBe('// const label = makeLabel;');
+    expect(op.line).toBe(8);
+    expect(op.mutated).toBe('// const alt = makeAlt;');
   });
 
   it('unknown language → null (不再回退 RUST——PR #11 终审回访)', async () => {
