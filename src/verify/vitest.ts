@@ -39,7 +39,7 @@ export function makeVitestRunner(config: JsRunnerConfig): VerifyRunner {
     async run(sandboxSrc, _sandboxTarget, scope, exec) {
       const { specFiles } = scope as VitestScope;
       const [cmd, ...args] = expandCmd(config.cmd, specFiles);
-      const out = await ((exec ?? realExec) as Exec)(cmd, args, sandboxSrc);
+      const out = await (exec ?? realExec)(cmd, args, sandboxSrc);
       return parseVitestJson(out);
     },
     group: groupBySpecDir,

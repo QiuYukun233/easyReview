@@ -70,7 +70,8 @@ function buildOp(file: string, line: number, original: string): MutationOp {
 }
 
 /** 为一个 chunk 选突变位点：优先 tree-sitter 挑"好语句"（赋值/调用→大概率红测试），
- *  挑不到回退 regex 扫描（loc≥3 函数逐行找第一条可注释语句,规则按语言）。都没有返回 null。 */
+ *  挑不到回退 regex 扫描（loc≥3 函数逐行找第一条可注释语句,规则按语言）。都没有返回 null。
+ *  regex 回退假定 leaves 行号已是真实文件坐标且落在语言有效区域内(vue 由 carve 保证)。 */
 export async function chooseMutation(chunk: Chunk, leaves: Leaf[], source: string): Promise<MutationOp | null> {
   // 显式分派:未知语言返回 null,不再回退 RUST(PR #11 终审回访——拆掉被 runnerFor 遮蔽的陷阱)
   const lang = langOf(chunk.file);
