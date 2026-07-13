@@ -134,6 +134,14 @@ git commit -m "feat: carveVueScript——Vue SFC script 区段切取(多块/offs
 - Modify: `src/extract/lang.ts`(全文件重写,原 40 行)
 - Modify: `test/lang.test.ts:9`(过渡性断言更新,见 Step 4)
 - Test: `test/lang-js-vue.test.ts`
+- Modify: `src/serve/highlight.ts` / `src/serve/source.ts`(**修订 2026-07-13**,见下)
+
+> **修订(2026-07-13,执行中发现):** 计划自审只查了 `=== 'rust'` 型比较,漏了
+> `serve/highlight.ts` 的 `KEYWORDS`/`TOKEN_RE` 是 `Record<LangSpec['id'], …>` 穷举映射——
+> id 联合加宽后 typecheck 必红。处置:highlight 补 js/vue 两个 key(共享 `JS_KEYWORDS`/
+> `JS_TOKEN_RE` 常量,真实 ES 关键字集;vue 的 template 部分按 JS 规则染色,spec §6
+> "效果可接受"仍成立);`source.ts` 的 `SourceBody.lang` 改为引用 `LangSpec['id']`,
+> 将来加语言不再改它。spec §6 "highlight 不动"字面上失效、精神(不为 JS 单做高亮工程)保留。
 
 - [ ] **Step 1: Write the failing test**
 
