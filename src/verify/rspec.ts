@@ -30,7 +30,7 @@ export function expandCmd(cmd: string[], specFiles: string[]): string[] {
   return cmd.flatMap((c) => (c === '{specFiles}' ? specFiles : [c]));
 }
 
-function groupBySpecDir(names: string[]): TestGroup[] {
+export function groupBySpecDir(names: string[]): TestGroup[] {
   const byDir = new Map<string, string[]>();
   for (const n of names) {
     const dir = n.split('/').slice(0, 2).join('/');

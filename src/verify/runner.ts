@@ -6,7 +6,7 @@ import { groupTestsByModule, type TestGroup } from './testlist.js';
 export type TestRun = CargoTestRun;
 
 export interface VerifyRunner {
-  id: 'rust' | 'ruby';
+  id: 'rust' | 'ruby' | 'js';  // js = vitest runner,同时服务 js 与 vue 两种块
   /** 圈定测试域(只读真实仓)。scope 可序列化,原样进 baseline JSON,predict 时原样传回。 */
   pickScope(g: GradedTree, chunk: Chunk, repo: string): { scope: unknown; note?: string };
   /** 在沙箱里跑该域测试。rspec 忽略 sandboxTarget。 */

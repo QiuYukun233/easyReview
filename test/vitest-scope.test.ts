@@ -92,7 +92,8 @@ describe('pickVitestScope', () => {
   it('walkSpecs ignores decoy specs inside node_modules/.git', () => {
     const dir = setup();
     writeRepoFile(dir, 'app/javascript/a/specs/real.spec.js', 'x');
-    writeRepoFile(dir, 'node_modules/pkg/fake.spec.js', 'x');
+    writeRepoFile(dir, 'node_modules/pkg/real.spec.js', 'uses real here');
+    writeRepoFile(dir, '.git/hooks/real.spec.js', 'uses real here');
     writeRepoFile(dir, 'app/javascript/b/decoy.test.js', 'x');
     const scope = pickVitestScope(dir, 'app/javascript/a/real.js', 20)!;
     expect(scope.specFiles).toEqual(['app/javascript/a/specs/real.spec.js']);
