@@ -44,4 +44,27 @@ describe('verify js/vue without runner config', () => {
     expect(execCalled).toBe(false);
     expect(existsSync(sandboxFor(dir).dir)).toBe(false);
   });
+
+  it('unregistered-language chunk (defensive branch): still rejected up front', async () => {
+    const { dir, cleanup } = makeTempRepo(); cleanups.push(cleanup);
+    const sb = sandboxFor(dir);
+    cleanups.push(() => rmSync(sb.dir, { recursive: true, force: true }));
+    // 手工造 tree.json:一个未注册语言的 chunk(正常 map 流程产不出它——防御分支的唯一触达方式)
+    const tree = {
+      repo: dir,
+      chapters: [{ id: 'root:', name: 'root::/', crate: 'root', dir: '', chunkIds: ['notes.md'] }],
+      chunks: [{ id: 'notes.md', name: 'notes', file: 'notes.md', crate: 'root', leafIds: [] }],
+      leaves: [],
+      grades: {},
+    };
+    writeRepoFile(dir, 'easyreview.tree.json', JSON.stringify(tree));
+    writeRepoFile(dir, 'notes.md', '# nothing\n');
+    let execCalled = false;
+    await expect(
+      runVerifyShow({ repo: dir, outDir: dir, chunkId: 'notes.md',
+        exec: async () => { execCalled = true; return ''; } }),
+    ).rejects.toThrow(/不在支持范围/);
+    expect(execCalled).toBe(false);
+    expect(existsSync(sandboxFor(dir).dir)).toBe(false);
+  });
 });
