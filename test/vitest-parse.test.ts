@@ -62,4 +62,14 @@ describe('parseVitestJson', () => {
     const out = line([{ name: '/app/a.spec.js', status: 'skipped' }]);
     expect(parseVitestJson(out).results[0].passed).toBe(false);
   });
+
+  it('JSON with trailing notice on the SAME line is parsed (real chatwoot: --outputFile=/dev/stdout)', () => {
+    const out = line([{ name: '/app/a.spec.js', status: 'passed' }]) + 'JSON report written to /dev/stdout.';
+    expect(parseVitestJson(out)).toEqual({ compiled: true, results: [{ name: 'a.spec.js', passed: true }] });
+  });
+
+  it('whole-output JSON with trailing notice also parsed via balanced fallback', () => {
+    const pretty = JSON.stringify({ testResults: [{ name: '/app/b.spec.js', status: 'failed' }] }, null, 2);
+    expect(parseVitestJson(pretty + '\nJSON report written to /dev/stdout.')).toEqual({ compiled: true, results: [{ name: 'b.spec.js', passed: false }] });
+  });
 });

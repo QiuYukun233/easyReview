@@ -7,20 +7,30 @@ import type { TestRun } from './runner.js';
  *  解析不出 / testResults 空 → compiled:false(套件没跑起来)。 */
 export function parseVitestJson(output: string): TestRun {
   // 整段兜底:某些版本/配置可能 pretty-print 多行 JSON——整个输出就是一个 JSON 时直接取
-  try {
-    const whole = JSON.parse(output.trim()) as { testResults?: Array<{ name?: string; status?: string }> };
-    if (Array.isArray(whole.testResults)) return fromResults(whole.testResults);
-  } catch { /* 不是整段 JSON,走行扫 */ }
+  const whole = tryParseObject(output.trim());
+  if (whole && Array.isArray(whole.testResults)) return fromResults(whole.testResults);
   const lines = output.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const t = lines[i].trim();
     if (!t.startsWith('{')) continue;
-    let j: { testResults?: Array<{ name?: string; status?: string }> };
-    try { j = JSON.parse(t) as typeof j; } catch { continue; }
-    if (!Array.isArray(j.testResults)) continue;
+    const j = tryParseObject(t);
+    if (!j || !Array.isArray(j.testResults)) continue;
     return fromResults(j.testResults);
   }
   return { compiled: false, results: [] };
+}
+
+type VitestReport = { testResults?: Array<{ name?: string; status?: string }> };
+
+/** 尝试把一段文本解析为 JSON 对象;直接失败则截到最后一个 '}' 再试
+ *  (vitest --outputFile=/dev/stdout 会在同一行 JSON 后追加 "JSON report written to ..." 提示)。 */
+function tryParseObject(t: string): VitestReport | null {
+  try { return JSON.parse(t) as VitestReport; } catch { /* 试截断 */ }
+  const i = t.lastIndexOf('}');
+  if (i > 0) {
+    try { return JSON.parse(t.slice(0, i + 1)) as VitestReport; } catch { /* 不是 */ }
+  }
+  return null;
 }
 
 /** testResults → TestRun 映射(整段兜底与行扫两分支共用);空数组 → compiled:false(套件没跑起来)。 */
