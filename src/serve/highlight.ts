@@ -1,5 +1,5 @@
 /** 轻量行级高亮:四类 token(注释/字符串/数字/关键字),先转义 HTML 再包 span——与页面 esc() 同一条纪律。
- *  行级=不处理跨行结构(块注释/heredoc),换取零状态、绝不误伤;失败降级为纯转义文本。 */
+ *  行级=不处理跨行结构(块注释/heredoc/跨行模板字符串),换取零状态、绝不误伤;失败降级为纯转义文本。 */
 import type { LangSpec } from '../extract/lang.js';
 
 type LangId = LangSpec['id'];

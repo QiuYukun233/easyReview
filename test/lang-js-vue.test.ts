@@ -22,6 +22,8 @@ describe('JS/Vue registry entries', () => {
     expect(inScope('app/javascript/dashboard/specs/helper.js')).toBe(false);
     expect(inScope('app/javascript/widget/spec/thing.js')).toBe(false);
     expect(inScope('app/javascript/dashboard/__tests__/thing.vue')).toBe(false);
+    expect(inScope('app/javascript/widget/Foo.spec.vue')).toBe(false);
+    expect(inScope('app/javascript/widget/Foo.test.vue')).toBe(false);
   });
 
   it('exclusion respects directory boundaries and does not over-match', () => {

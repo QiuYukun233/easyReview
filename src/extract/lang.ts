@@ -40,7 +40,7 @@ const JS_QUERY = [
 ].join('\n');
 
 // 测试文件不进学习地图（与 Rails 侧 spec/ 被 --include app 天然排除对称）
-const TEST_EXCLUDES = [/\.spec\.js$/, /\.test\.js$/, /(^|\/)specs?\//, /(^|\/)__tests__\//];
+const TEST_EXCLUDES = [/\.spec\.(js|vue)$/, /\.test\.(js|vue)$/, /(^|\/)specs?\//, /(^|\/)__tests__\//];
 
 export const JS: LangSpec = {
   id: 'js',
