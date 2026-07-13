@@ -48,6 +48,39 @@ describe('chooseMutation (js)', () => {
     expect(op.mutated).toBe('  // emit("done");');
   });
 
+  it('regex fallback never picks literal-closing lines (};/];)', async () => {
+    const { chunk, leaves } = mk('app/javascript/widget/options.js');
+    // 全文件无 call/assignment——必走 regex 回退;函数体内的候选只有字面量收尾与一条声明
+    const src = [
+      'export default {',      // 1
+      '  data() {',            // 2
+      '    return {',          // 3
+      '      count: 0,',       // 4  以 , 结尾,不选
+      '    };',                // 5  收尾行——绝不能选
+      '  },',                  // 6
+      '};',                    // 7
+    ].join('\n');
+    const op = await chooseMutation(chunk, leaves(2, 6), src);
+    expect(op).toBeNull(); // 该范围内没有任何安全可注释行
+  });
+
+  it('vue regex fallback stays inside the script region (真正走回退路径)', async () => {
+    const { chunk } = mk('app/javascript/widget/Decl.vue');
+    // script 里只有声明,tree-sitter 无候选 → regex 回退;唯一 ; 结尾的安全行是声明行
+    const sfc = [
+      '<template>',                 // 1
+      '  <div>{{ label }}</div>',   // 2
+      '</template>',                // 3
+      '<script setup>',             // 4
+      'const label = makeLabel;',   // 5  ← 回退应选这行(叶子范围内、; 结尾、无反引号)
+      '</script>',                  // 6
+    ].join('\n');
+    const vueLeaves: Leaf[] = [{ id: 'l', kind: 'fn', name: 'label', file: chunk.file, startLine: 5, endLine: 5, loc: 3 }];
+    const op = (await chooseMutation(chunk, vueLeaves, sfc))!;
+    expect(op.line).toBe(5);
+    expect(op.mutated).toBe('// const label = makeLabel;');
+  });
+
   it('unknown language → null (不再回退 RUST——PR #11 终审回访)', async () => {
     const chunk: Chunk = { id: 'notes.txt', name: 'notes', file: 'notes.txt', crate: 'root', leafIds: [] };
     const leaves: Leaf[] = [{ id: 'l', kind: 'fn', name: 'x', file: 'notes.txt', startLine: 1, endLine: 3, loc: 3 }];
