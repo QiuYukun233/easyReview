@@ -47,4 +47,20 @@ describe('carveVueScript', () => {
     expect(segs).toHaveLength(1);
     expect(segs[0].source).toBe('\nconst h = 3;\n');
   });
+
+  it('hyphenated custom elements are NOT script tags', () => {
+    const sfc = '<script-runner foo="bar">\nnot js\n</script-runner>\n<script setup>\nconst k = 4;\n</script>\n';
+    const segs = carveVueScript(sfc);
+    expect(segs).toHaveLength(1);
+    expect(segs[0].source).toBe('\nconst k = 4;\n');
+    expect(segs[0].lineOffset).toBe(3);
+  });
+
+  it('attributes spanning multiple lines: lineOffset counts to end of opening tag', () => {
+    const sfc = '<script\n  setup\n  lang="js"\n>\nconst m = 5;\n</script>\n';
+    const segs = carveVueScript(sfc);
+    expect(segs).toHaveLength(1);
+    expect(segs[0].source).toBe('\nconst m = 5;\n');
+    expect(segs[0].lineOffset).toBe(3); // 开标签的 > 在 0 基第 3 行
+  });
 });

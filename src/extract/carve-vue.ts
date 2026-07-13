@@ -1,9 +1,11 @@
 /** Vue SFC 的 <script> 区段切取:regex 定位开标签,首个 </script> 收尾(HTML 规范同款切法)。
  *  lineOffset = 开标签结尾所在 0 基行号;区段从 > 之后开始(区段 row 0 = 开标签行剩余部分),
- *  故叶子真实行号 = 区段内 row + 1 + lineOffset。 */
+ *  故叶子真实行号 = 区段内 row + 1 + lineOffset。
+ *  已知边界:HTML 注释里的 <script> 也会被切出(regex 不解注释语法),
+ *  最坏喂给 parser 一段无函数捕获的垃圾,可接受。 */
 export interface CarvedSegment { source: string; lineOffset: number }
 
-const OPEN_TAG = /<script\b[^>]*>/g;
+const OPEN_TAG = /<script(?=[\s>])[^>]*>/g;
 
 export function carveVueScript(source: string): CarvedSegment[] {
   const segments: CarvedSegment[] = [];
