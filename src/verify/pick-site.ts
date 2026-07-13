@@ -62,7 +62,7 @@ function sitesOf(candidates: Parser.SyntaxNode[], lines: string[]): Array<{ line
  * - Ruby:单行 call/assignment/operator_assignment 且处于语句位。
  * - JS:单行 expression_statement,子节点是调用/赋值/复合赋值(await/括号下钻)。
  * - Vue:按 carve 区段逐段挑(JS 规则),行号还原到真实文件;半行守卫:区段行与真实
- *   文件行逐字节一致才可信——开标签行剩余与闭标签同行都被它挡住。
+ *   文件行逐字节一致才可信——开标签行剩余、闭标签同行、字符串内假闭标签导致的截断行都被它挡住。
  * 找不到返回 null。返回 1-based 行号 + 该行完整原文。
  */
 export async function pickPreferredSite(
