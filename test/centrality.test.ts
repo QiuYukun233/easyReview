@@ -81,8 +81,8 @@ describe('nameFanInCentrality tokenized rewrite', () => {
   it('names with $ or unicode chars stay equivalent via fallback (WORD must mirror \\w)', () => {
     const leaves = [leaf('u.js', 'get$ref'), leaf('v.js', 'café')];
     const sources: Record<string, string> = {
-      'u.js': 'café(); get$ref();',
-      'v.js': 'get$ref(); get$ref; x = café + caféx; get$refx();',
+      'u.js': 'caféx(); get$ref();',
+      'v.js': 'x$get$ref; get$ref(); x = café + caféx;',
     };
     expect(nameFanInCentrality(leaves, sources)).toEqual(naiveReference(leaves, sources));
   });
