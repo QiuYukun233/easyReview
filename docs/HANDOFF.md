@@ -18,7 +18,7 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **56 文件 / 211 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
+- **62 文件 / 261 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
@@ -55,6 +55,8 @@ npm run verify -- crates/chem_field/src/core/field.rs --predict <逗号分隔测
 #   `easyreview verify --clean` 删沙箱。首次全量编译较慢，之后增量。
 # 2026-07-12 起支持 Ruby/rspec：仓根 `easyreview.runner.json` 声明测试命令（chatwoot 配方 `docs/recipes/chatwoot-rspec.md`），
 #   范围=镜像 spec+引用扫描（超上限回退），预测粒度=spec 文件级。
+# 2026-07-13 起支持 JS/Vue/vitest：同一 easyreview.runner.json 加 js 节（chatwoot 配方 `docs/recipes/chatwoot-vitest.md`），
+#   范围=basename 镜像 spec+引用扫描（超上限回退），预测粒度=spec 文件级；.vue 突变只落在 <script> 区域（半行守卫）。
 
 # ⑤ Ruby 仓库（如 chatwoot）：同一套命令 + --include 限目录（outDir 与 umwelt-bevy 隔离）
 npm run map   -- --repo E:/learning/agent-research/repos/chatwoot --include app --out <chatwoot-out>
@@ -100,9 +102,12 @@ npm run serve -- --out <chatwoot-out> --port 4872
 | `verify/rspec.ts` | 仓级 runner 配置加载 + RspecRunner（`{specFiles}` 展开、目录分组）|
 | `verify/rspec-scope.ts` | 镜像 spec 映射 + 类名引用扫描 + 上限回退 |
 | `verify/rspec-parse.ts` | rspec JSON 噪音提取 + spec 文件级聚合 + 加载崩语义 |
+| `verify/vitest.ts` | js 节配置加载 + VitestRunner（一个 runner 服务 js/vue 两种块）|
+| `verify/vitest-scope.ts` | basename 索引镜像 spec（最长公共前缀消歧）+ 引用扫描 + 上限回退 |
+| `verify/vitest-parse.ts` | vitest --reporter=json 解析（整段兜底+行扫、路径归一、文件级聚合）|
 | `extract/parser.ts` | 按语言的 tree-sitter parser 单例 getParser（getRustParser 为薄包装,pick-site.ts 沿用）|
-| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：语言感知 Rust/Ruby，优先 tree-sitter 好语句、regex 兜底）|
-| `verify/pick-site.ts` | pickPreferredSite：语言感知（Rust/Ruby）挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail；Ruby 侧含 heredoc 排除（注释会孤儿化 heredoc 体）|
+| `verify/mutate.ts` | withMutation（**finally 保证还原 + 行校验**，绝不损坏 umwelt-bevy）+ chooseMutation（async：语言感知 Rust/Ruby/JS，优先 tree-sitter 好语句、regex 兜底）；未知语言显式 null（不再回退 RUST）；isCommentableJs 五前缀收尾守卫|
+| `verify/pick-site.ts` | pickPreferredSite：语言感知（Rust/Ruby）挑赋值/复合赋值/裸调用（下钻 ?/.await/paren）语句作突变位点，避开 let/构造体/tail；Ruby 侧含 heredoc 排除（注释会孤儿化 heredoc 体）；JS 语句位点 + vue 按 carve 区段（半行字节一致性守卫，2026-07-13）|
 | `verify/probe.ts` | 爆炸半径探针（基线→突变→跑→diff→还原）|
 | `verify/judge.ts` | 判定预测 vs 真实爆炸半径 |
 | `interpret/input.ts` | 解读喂料:整文件源码+确定性事实,contentHash(含 PROMPT_VERSION)|
@@ -130,6 +135,7 @@ npm run serve -- --out <chatwoot-out> --port 4872
 5. ~~**Ruby 映射（多语言子项目①，学 chatwoot）**~~ ✅ 已完成（分支 feat/ruby-mapping，见 `docs/superpowers/plans/2026-07-08-ruby-mapping.md`）。语言注册表（`extract/lang.ts`,加语言=加一项）+ 通用叶子提取 + `--include` 目录过滤 + 标签围栏按语言 + verify 非 Rust 友好拒绝。真实 chatwoot 冒烟通过（`--include app` → 738 块/167 章/4780 方法,风险四桶均匀;`conversation.rb` 评 high:high/40 方法,与领域常识吻合;umwelt-bevy 回归 68 块+标签缓存原封不动）。**遗留**:chatwoot 标签还没打（跑冒烟时环境无 DEEPSEEK_API_KEY;设好后重跑 map 即可,738 次调用一次性成本）。
 6. ~~**rspec 突变探针（多语言子项目②）**~~ ✅ 已完成（分支 feat/rspec-probe，见 `docs/superpowers/plans/2026-07-12-rspec-probe.md`）。VerifyRunner 接口按语言分发（CargoRunner 纯搬运 + RspecRunner）;范围=镜像 spec+类名引用扫描（超上限回退）;预测粒度=spec 文件级;环境=仓级 `easyreview.runner.json` 命令模板+Docker Compose 配方（`docs/recipes/chatwoot-rspec.md`）。真仓验收通过（chatwoot:突变 `include UrlHelper` → 镜像 spec 红/controller spec 绿,预测命中→verified;真实仓零接触）。
 7. ~~**Vue/JS 提取**~~ ✅ 已完成（分支 feat/vue-js-extraction，见 `docs/superpowers/plans/2026-07-13-vue-js-extraction.md`）。注册表加 js/vue 两项（LangSpec 新增可选 carve 区段切取/exclude 排除，JS 查询五形态实测定稿）;Vue SFC 切 <script> 区段、叶子行号指向真实文件;测试文件（*.spec.js/*.test.js/specs//__tests__/）不进地图;中心度分词化过规模关（2800 文件×1.2 万名字约几秒;非词字符名~13% 走旧正则回退，将来可做词干+后缀专用分词）;verify 对 vue/js 前置友好拒绝（零磁盘副作用有显式断言）。真仓验收通过（2026-07-13,chatwoot `--include app`:**8.5 秒**出图,2425 块/609 章/11694 叶=738 rb+1091 vue+596 js,测试文件零泄漏;`AccordionItem.vue` 叶子跳行精确命中 script 真实行;URLHelper/conversation.rb 新旧中心度计数真仓对拍一致;umwelt-bevy 回归 68 块+标签缓存字节级不变）。**已知局限**:名字扇入中心度的泛用名噪音被前端放大——Vuex actions.js 的 `get`/`update` 这类名字全仓命中而霸榜,URLHelper 这类具体名 helper 只排中游（v1 近似固有性质,新旧实现一致;将来由调用图替换,顺带做非词字符名的词干+后缀快速分词）。
+8. ~~**vitest 突变探针**~~ ✅ 已完成（分支 feat/vitest-probe，见 `docs/superpowers/plans/2026-07-13-vitest-probe.md`）。verify 全语言闭环：runnerFor 分发 vitest（js/vue 共用一个 runner）；圈定=basename 索引镜像+引用扫描；位点=JS 语句+vue carve 区段（半行字节一致性守卫）；死码清理（未知语言→null）；vitest 逐文件隔离使加载失败=正常爆炸半径，judge 零改动。真仓验收通过（2026-07-13，chatwoot：js 块 `URLHelper.js` 突变→镜像 spec 红/预测命中→verified；vue 块 `InboxFacebookForm.vue` 突变 `onMounted(preloadSdk);`→祖先层镜像 spec 红/预测命中→verified；另三个 .vue 块得到诚实 uncovered/无位点判定——挂载型 spec 大多只断言渲染，事件处理器位点常不被覆盖，见配方"已知局限"；真实仓零接触、沙箱字节还原）。**验收实踩雷已回写配方**：vitest.config 的 `outputFile` 劫持 json reporter → cmd 必须 `--outputFile=/dev/stdout`，且 vitest 在同一行 JSON 后粘提示语 → 解析加了平衡截断容忍（设计 §7 的第三段策略被现实要了回来）。
 
 ## 一些工作方式上值得记住的经验
 

@@ -9,6 +9,7 @@ import { judge } from './verify/judge.js';
 import { loadProgress, saveProgress, markUnderstood } from './progress/progress.js';
 import { cargoRunner, type VerifyRunner } from './verify/runner.js';
 import { loadRubyRunnerConfig, makeRspecRunner } from './verify/rspec.js';
+import { loadJsRunnerConfig, makeVitestRunner } from './verify/vitest.js';
 import { langOf } from './extract/lang.js';
 
 function loadTree(outDir: string): GradedTree {
@@ -24,7 +25,8 @@ function runnerFor(chunk: Chunk, repo: string): VerifyRunner {
   const lang = langOf(chunk.file)?.id;
   if (lang === 'rust') return cargoRunner;
   if (lang === 'ruby') return makeRspecRunner(loadRubyRunnerConfig(repo));
-  throw new Error(`verify（突变探针）暂只支持 Rust（cargo）与 Ruby（rspec）；\`${chunk.file}\` 不在支持范围。`);
+  if (lang === 'js' || lang === 'vue') return makeVitestRunner(loadJsRunnerConfig(repo));
+  throw new Error(`verify（突变探针）暂只支持 Rust（cargo）、Ruby（rspec）与 JS/Vue（vitest）；\`${chunk.file}\` 不在支持范围。`);
 }
 const baselinePath = (o: string) => join(o, 'easyreview.verify-baseline.json');
 const verifyMd = (o: string) => join(o, 'easyreview.verify.md');
@@ -51,14 +53,18 @@ export async function runVerifyShow(o: ShowOpts): Promise<void> {
       ? (firstRun
           ? `⏳ 沙箱首次全量编译 ${chunk.crate} 可能要 5-10 分钟（独立缓存,不碰真实仓的 target/），属正常、不是卡住。`
           : `⏳ 编译 ${chunk.crate}（沙箱增量）…`)
-      : `⏳ 运行 rspec（docker 冷启动/bundle 首次可能较慢）…`,
+      : runner.id === 'ruby'
+        ? `⏳ 运行 rspec（docker 冷启动/bundle 首次可能较慢）…`
+        : `⏳ 运行 vitest（docker 冷启动/依赖首装后首跑较慢）…`,
   );
   const baseline = await runner.run(sb.srcDir, sb.targetDir, picked.scope, o.exec);
   if (!baseline.compiled) {
     throw new Error(
       runner.id === 'rust'
         ? `${chunk.crate} 的基线 cargo test 无法编译——先修好编译错误再验证这个块。`
-        : '基线 rspec 无法加载或零 example——先确认测试环境可用（docs/recipes/chatwoot-rspec.md）。',
+        : runner.id === 'ruby'
+          ? '基线 rspec 无法加载或零 example——先确认测试环境可用（docs/recipes/chatwoot-rspec.md）。'
+          : '基线 vitest 没跑起来或零结果——先确认测试环境可用（docs/recipes/chatwoot-vitest.md）。',
     );
   }
   const green = baseline.results.filter((r) => r.passed).map((r) => r.name);
