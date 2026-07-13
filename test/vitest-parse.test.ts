@@ -42,4 +42,24 @@ describe('parseVitestJson', () => {
     const out = [line([{ name: '/app/a.spec.js', status: 'passed' }]), '{"unrelated": true}'].join('\n');
     expect(parseVitestJson(out).compiled).toBe(true);
   });
+
+  it('pretty-printed multi-line JSON (whole output) is parsed via whole-parse fallback', () => {
+    const out = JSON.stringify({ testResults: [{ name: '/app/a.spec.js', status: 'passed', assertionResults: [] }] }, null, 2);
+    expect(parseVitestJson(out)).toEqual({ compiled: true, results: [{ name: 'a.spec.js', passed: true }] });
+  });
+
+  it('multi-line JSON mixed with noise still degrades to compiled:false (documented limitation)', () => {
+    const pretty = JSON.stringify({ testResults: [{ name: '/app/a.spec.js', status: 'passed' }] }, null, 2);
+    expect(parseVitestJson('noise line\n' + pretty).compiled).toBe(false);
+  });
+
+  it('backslash paths are normalized before stripping', () => {
+    const out = line([{ name: 'C:\\sandbox\\src\\app\\javascript\\x\\y.spec.js', status: 'passed' }]);
+    expect(parseVitestJson(out).results[0].name).toBe('app/javascript/x/y.spec.js');
+  });
+
+  it('unknown status (skipped) counts as not passed — locked polarity', () => {
+    const out = line([{ name: '/app/a.spec.js', status: 'skipped' }]);
+    expect(parseVitestJson(out).results[0].passed).toBe(false);
+  });
 });
