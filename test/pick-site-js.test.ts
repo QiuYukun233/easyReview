@@ -73,4 +73,35 @@ describe('pickPreferredSite (vue, carve 感知)', () => {
   it('template-only SFC → null', async () => {
     expect(await pickPreferredSite('<template><div /></template>\n', VUE)).toBeNull();
   });
+
+  it('closing tag on the same line as the statement: candidate rejected (守卫回归)', async () => {
+    expect(await pickPreferredSite('<script setup>\nfoo();</script>\n', VUE)).toBeNull();
+  });
+
+  it('dual script blocks: falls through to a site in the second segment', async () => {
+    const sfc = [
+      '<script>',            // 1
+      'const a = 1;',        // 2  声明,非目标
+      '</script>',           // 3
+      '<script setup>',      // 4
+      'boot();',             // 5  ← 第二段的目标,真实行 5
+      '</script>',           // 6
+    ].join('\n');
+    const site = (await pickPreferredSite(sfc, VUE))!;
+    expect(site.line).toBe(5);
+    expect(site.original).toBe('boot();');
+  });
+
+  it('multi-line attribute opening tag: offset still lands on the real line', async () => {
+    const sfc = [
+      '<script',             // 1
+      '  setup',             // 2
+      '>',                   // 3
+      'boot();',             // 4  ← 真实行 4
+      '</script>',           // 5
+    ].join('\n');
+    const site = (await pickPreferredSite(sfc, VUE))!;
+    expect(site.line).toBe(4);
+    expect(site.original).toBe('boot();');
+  });
 });
