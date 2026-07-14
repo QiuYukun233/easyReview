@@ -144,4 +144,13 @@ describe('referenceGraphCentrality(引用图加权入度,spec:2026-07-14-central
       ['f01.js', 'f02.js', 'f03.js', 'f04.js', 'f05.js', 'f06.js', 'f07.js', 'f08.js', 'f09.js'],
     ); // 平权按 from 字典序,f10.js 被 top-10 截掉
   });
+
+  it('非词名(valid?)走正则回退成边(尾缀 ? 要求后跟词字符,夹具用 valid?x 形式)', () => {
+    const chunks = [chunk('m.rb'), chunk('n.rb')];
+    const leaves = [leaf('m.rb', 'valid?')];
+    const sources = { 'm.rb': 'def valid?; end', 'n.rb': 'x = valid?x' };
+    const { centrality, refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['m.rb']).toEqual([{ from: 'n.rb', weight: 1, names: ['valid?'] }]);
+    expect(centrality['m.rb']).toBe(1);
+  });
 });

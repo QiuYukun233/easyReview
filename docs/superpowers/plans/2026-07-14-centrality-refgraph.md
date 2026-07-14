@@ -12,7 +12,7 @@
 - easyReview 给仓库文件(「块」)打分;中心度 = 「全仓多依赖这个文件」,权重 0.6 进贡献度。
 - v1 数每块函数名(叶子名)在其它文件的出现次数。两个根本局限:①「提到≠依赖」,单文件反复提及刷分;②块身份名(`import ApiClient` 的 `ApiClient`、Ruby 常量 `UrlHelper`)不是叶子,最强的依赖信号完全看不见。
 - v2 规则:名字池 = 叶子名 ∪ 身份名(`chunk.name` 即无扩展名 basename;`.rb` 另加驼峰 `url_helper→UrlHelper`;非词 basename 不产);df(名字出现过的文件数)> `genericDfCutoff(N)` 的名字不建边;文件 f(非定义者)出现保留名字**≥1 次即记 1**(fin,不按次数)→ 边 `f→每个定义者`,权重 `1/定义者数`;中心度 = 入边权重和归一化 0..1,全零 `{}`;refsIn = 每块入边 top-10(权重降序、平权 from 字典序、names 字典序)。
-- **删除 v1 的连锁**:`nameFanInCentrality` 退役 → 它的 11 条测试(1 条旧行为 + 4 条 naiveReference 对拍 + 6 条截断行为)一并删除;`genericDfCutoff` 3 条保留;新增 11 条图行为测试 → 文件 14 条不变,全量仍 **62 文件 / 281 测试**。
+- **删除 v1 的连锁**:`nameFanInCentrality` 退役 → 它的 11 条测试(1 条旧行为 + 4 条 naiveReference 对拍 + 6 条截断行为)一并删除;`genericDfCutoff` 3 条保留;新增 12 条图行为测试(含非词名回退回归——评审曾抓到该路径因转义字节损坏而死、且无测试覆盖)→ 文件 15 条,全量 **62 文件 / 282 测试**。
 - 这是一次原子替换:centrality.ts 重写后 cli.ts 的旧导入立即失效,四个文件必须同任务内完成。
 
 ---
@@ -175,6 +175,15 @@ describe('referenceGraphCentrality(引用图加权入度,spec:2026-07-14-central
     expect(list.slice(1).map((r) => r.from)).toEqual(
       ['f01.js', 'f02.js', 'f03.js', 'f04.js', 'f05.js', 'f06.js', 'f07.js', 'f08.js', 'f09.js'],
     ); // 平权按 from 字典序,f10.js 被 top-10 截掉
+  });
+
+  it('非词名(valid?)走正则回退成边(尾缀 ? 要求后跟词字符,夹具用 valid?x 形式)', () => {
+    const chunks = [chunk('m.rb'), chunk('n.rb')];
+    const leaves = [leaf('m.rb', 'valid?')];
+    const sources = { 'm.rb': 'def valid?; end', 'n.rb': 'x = valid?x' };
+    const { centrality, refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['m.rb']).toEqual([{ from: 'n.rb', weight: 1, names: ['valid?'] }]);
+    expect(centrality['m.rb']).toBe(1);
   });
 });
 ```
@@ -378,12 +387,12 @@ runMap 中这一段:
 - [ ] **Step 6: 跑测试确认全绿**
 
 Run: `npx vitest run test/centrality.test.ts test/cli.test.ts`
-Expected: PASS——centrality 14 条(cutoff 3 + 图行为 11),cli.test 全绿(含新断言)。
+Expected: PASS——centrality 15 条(cutoff 3 + 图行为 12),cli.test 全绿(含新断言)。
 
 - [ ] **Step 7: 全量测试 + 类型检查**
 
 Run: `npm test`
-Expected: 全绿(62 文件 / 281 测试;删 v1 系 11 条 + 增图行为 11 条,总数不变)。
+Expected: 全绿(62 文件 / 282 测试;删 v1 系 11 条 + 增图行为 12 条,净 +1)。
 
 Run: `npm run typecheck`
 Expected: 零错误(尤其确认 `nameFanInCentrality` 无残余引用)。
