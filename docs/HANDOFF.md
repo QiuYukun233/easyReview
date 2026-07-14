@@ -18,7 +18,7 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **62 文件 / 261 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
+- **62 文件 / 272 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
@@ -79,7 +79,7 @@ npm run serve -- --out <chatwoot-out> --port 4872
 |---|---|
 | `types.ts` | 所有共享类型（三层树、Grade、JourneyPath、Progress、验证类型）|
 | `git.ts` | git 封装（listTrackedFiles、logNameOnly）|
-| `extract/lang.ts` | 语言注册表（rust+ruby+js+vue：扩展名/wasm/叶子query/围栏 + 可选 carve 区段切取/exclude 测试排除）+ langOf/inScope（加语言=加一项）|
+| `extract/lang.ts` | 语言注册表（rust+ruby+js+vue：扩展名/wasm/叶子query/围栏 + 可选 carve 区段切取/exclude 测试排除）+ langOf/inScope（加语言=加一项）;JS 查询六形态（第六=标识符调用含函数实参的具名绑定，通用规则无白名单，2026-07-13）|
 | `extract/carve-vue.ts` | Vue SFC <script> 区段切取（regex 定位、lineOffset 还原真实行号；已知边界:字符串/HTML注释里的 </script> 会切早，接受）|
 | `extract/leaves.ts` | 通用 tree-sitter 叶子提取（query 按语言编译一次、tree 每次释放）|
 | `extract/tree.ts` | 组装三层树（章=crate 或顶层目录/子目录，块=文件，叶=函数/方法；--include 前缀过滤）|
@@ -136,6 +136,7 @@ npm run serve -- --out <chatwoot-out> --port 4872
 6. ~~**rspec 突变探针（多语言子项目②）**~~ ✅ 已完成（分支 feat/rspec-probe，见 `docs/superpowers/plans/2026-07-12-rspec-probe.md`）。VerifyRunner 接口按语言分发（CargoRunner 纯搬运 + RspecRunner）;范围=镜像 spec+类名引用扫描（超上限回退）;预测粒度=spec 文件级;环境=仓级 `easyreview.runner.json` 命令模板+Docker Compose 配方（`docs/recipes/chatwoot-rspec.md`）。真仓验收通过（chatwoot:突变 `include UrlHelper` → 镜像 spec 红/controller spec 绿,预测命中→verified;真实仓零接触）。
 7. ~~**Vue/JS 提取**~~ ✅ 已完成（分支 feat/vue-js-extraction，见 `docs/superpowers/plans/2026-07-13-vue-js-extraction.md`）。注册表加 js/vue 两项（LangSpec 新增可选 carve 区段切取/exclude 排除，JS 查询五形态实测定稿）;Vue SFC 切 <script> 区段、叶子行号指向真实文件;测试文件（*.spec.js/*.test.js/specs//__tests__/）不进地图;中心度分词化过规模关（2800 文件×1.2 万名字约几秒;非词字符名~13% 走旧正则回退，将来可做词干+后缀专用分词）;verify 对 vue/js 前置友好拒绝（零磁盘副作用有显式断言）。真仓验收通过（2026-07-13,chatwoot `--include app`:**8.5 秒**出图,2425 块/609 章/11694 叶=738 rb+1091 vue+596 js,测试文件零泄漏;`AccordionItem.vue` 叶子跳行精确命中 script 真实行;URLHelper/conversation.rb 新旧中心度计数真仓对拍一致;umwelt-bevy 回归 68 块+标签缓存字节级不变）。**已知局限**:名字扇入中心度的泛用名噪音被前端放大——Vuex actions.js 的 `get`/`update` 这类名字全仓命中而霸榜,URLHelper 这类具体名 helper 只排中游（v1 近似固有性质,新旧实现一致;将来由调用图替换,顺带做非词字符名的词干+后缀快速分词）。
 8. ~~**vitest 突变探针**~~ ✅ 已完成（分支 feat/vitest-probe，见 `docs/superpowers/plans/2026-07-13-vitest-probe.md`）。verify 全语言闭环：runnerFor 分发 vitest（js/vue 共用一个 runner）；圈定=basename 索引镜像+引用扫描；位点=JS 语句+vue carve 区段（半行字节一致性守卫）；死码清理（未知语言→null）；vitest 逐文件隔离使加载失败=正常爆炸半径，judge 零改动。真仓验收通过（2026-07-13，chatwoot：js 块 `URLHelper.js` 突变→镜像 spec 红/预测命中→verified；vue 块 `InboxFacebookForm.vue` 突变 `onMounted(preloadSdk);`→祖先层镜像 spec 红/预测命中→verified；另三个 .vue 块得到诚实 uncovered/无位点判定——挂载型 spec 大多只断言渲染，事件处理器位点常不被覆盖，见配方"已知局限"；真实仓零接触、沙箱字节还原）。**验收实踩雷已回写配方**：vitest.config 的 `outputFile` 劫持 json reporter → cmd 必须 `--outputFile=/dev/stdout`，且 vitest 在同一行 JSON 后粘提示语 → 解析加了平衡截断容忍（设计 §7 的第三段策略被现实要了回来）。
+9. ~~**叶子形态扩展**~~ ✅ 已完成（分支 feat/leaf-form-expansion，见 `docs/superpowers/plans/2026-07-13-leaf-form-expansion.md`）。JS_QUERY 加第六形态：`const x = computed(() => …)` 这类"标识符调用含函数实参"的具名绑定成为叶子（**通用规则无白名单**，用户选定；`setTimeout` 型绑定也收是接受的代价；member_expression 调用/解构/嵌套调用实参不捕获，多函数实参只产一条匹配，与形态 3 语法互斥不撞 id——均对真实 wasm 实测锁死）。下游零改动：interpret 缓存键已含 functions 名单自动失效；verify regex 回退按 loc≥3 圈新叶范围。真仓验收通过（2026-07-14，chatwoot：叶子 11694→**13834**（vue +1982/js +158/rb 不变），map 13.2 秒仍秒级；SidebarUnreadBadge/ChannelLeaf 从零叶变有叶、跳行逐行精确；verify 真探针：`SidebarGroupLeaf.vue` 突变 `shouldRenderComponent` computed 体内 return 行→镜像 spec **真变红**（爆炸半径捕获），ChannelLeaf/Button 得诚实 uncovered 判定——纯声明组件从"找不到可突变的语句行"变为可探测；umwelt 回归 68 块/540 叶+标签缓存原样；真实仓零接触）。
 
 ## 一些工作方式上值得记住的经验
 
