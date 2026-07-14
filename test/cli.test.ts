@@ -22,6 +22,7 @@ describe('runMap', () => {
     const tree = JSON.parse(readFileSync(join(outDir, 'easyreview.tree.json'), 'utf8'));
     expect(tree.chunks.length).toBe(2);
     expect(tree.grades).toBeDefined();
+    expect(tree.refsIn).toBeDefined();
     const md = readFileSync(join(outDir, 'easyreview.map.md'), 'utf8');
     expect(md).toContain('# easyReview 地图');
   });
