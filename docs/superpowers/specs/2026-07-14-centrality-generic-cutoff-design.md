@@ -43,7 +43,7 @@
 > df > cutoff 的名字视为词汇噪音,**贡献归零**;其余名字照旧按「在其它文件的出现次数」加总,归一化不变。
 
 - 常数具名导出:`GENERIC_DF_RATIO = 0.05`、`GENERIC_DF_FLOOR = 20`;不做 CLI 参数(实测定的值,要改改代码)。
-- cutoff 计算抽成导出的纯函数 `genericDfCutoff(fileCount)`——5% 分支(N>400 才生效)直接对纯函数做单测,行为测试只需下限档(25 个合成文件)即可触发截断,不用造 400+ 文件夹具。
+- cutoff 计算抽成导出的纯函数 `genericDfCutoff(fileCount)`——5% 分支(N>400 才生效)直接对纯函数做单测,行为测试只需下限档(22–23 个合成文件)即可触发截断,不用造 400+ 文件夹具。
 - df 含自己:与「其它文件出现次数」的计数口径差 1 个文件,在下限 20 面前无实质影响,换取 df 全局算一次的简单性。
 - 非词名(ruby `valid?`/`save!`,~13%)走既有正则回退,df 在同一趟扫描里顺手统计,同受截断。
 
@@ -64,7 +64,7 @@
 - **journey/map.md**:顺序重排,每次 map 本来就重新生成。
 - serve / verify / extract:零波及。
 
-## 测试计划(~7 条,全在 test/centrality.test.ts 追加)
+## 测试计划(9 条,全在 test/centrality.test.ts 追加)
 
 1. `genericDfCutoff`:N=68→20(下限)、N=400→20(边界)、N=2425→122(5% 分支)。
 2. 阈值边界:df 恰好 = cutoff 计入、cutoff+1 截断(25 个合成文件,下限档)。
