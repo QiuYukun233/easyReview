@@ -47,8 +47,9 @@ describe('genericDfCutoff', () => {
     expect(genericDfCutoff(68)).toBe(20);
   });
 
-  it('N=400 恰为 5% 与下限的交界', () => {
+  it('N=400 恰为 5% 与下限的交界,401 起 5% 分支生效', () => {
     expect(genericDfCutoff(400)).toBe(20);
+    expect(genericDfCutoff(401)).toBe(21);
   });
 
   it('大仓库走 ceil(5%)(chatwoot N=2425 → 122)', () => {
@@ -87,14 +88,27 @@ describe('nameFanInCentrality 泛用名截断', () => {
 
   it('非词名(valid?)走正则回退同样受截断', () => {
     const leaves = [leaf('m.rb', 'valid?'), leaf('n.rb', 'compute_thing')];
-    const sources: Record<string, string> = { 'm.rb': 'def valid?; end', 'n.rb': 'def compute_thing; end' };
+    // \bvalid\?\b 要求 ? 后紧跟词字符才有边界(新旧实现一致的既有怪癖),夹具统一用 valid?x 形式
+    const sources: Record<string, string> = { 'm.rb': 'valid?x = 1', 'n.rb': 'def compute_thing; end' };
     for (let i = 1; i <= 20; i++) {
-      sources[`r${i}.rb`] = 'valid? && go' + (i <= 3 ? '; compute_thing' : '');
+      sources[`r${i}.rb`] = 'valid?x && go' + (i <= 3 ? '; compute_thing' : '');
     }
-    // 22 文件,cutoff=20;valid? df=21 → 截断;compute_thing df=4 → 计 3 次
+    // 22 文件,cutoff=20;valid? df=21(m.rb+r1..r20)→ 截断;compute_thing df=4 → 计 3 次
     const cen = nameFanInCentrality(leaves, sources);
     expect(cen['n.rb']).toBe(1);
     expect(cen['m.rb'] ?? 0).toBe(0);
+  });
+
+  it('非词名 df == cutoff 恰好计入(回退路径边界)', () => {
+    const leaves = [leaf('m.rb', 'valid?'), leaf('n.rb', 'compute_thing')];
+    const sources: Record<string, string> = { 'm.rb': 'valid?x = 1', 'n.rb': 'def compute_thing; end' };
+    for (let i = 1; i <= 19; i++) sources[`r${i}.rb`] = 'valid?x && go';
+    sources['r20.rb'] = 'compute_thing';
+    sources['r21.rb'] = 'compute_thing';
+    // 23 文件,cutoff=20;valid? df=20(m.rb+r1..r19)== cutoff → 计入 19 次;compute_thing df=3 → 计 2 次
+    const cen = nameFanInCentrality(leaves, sources);
+    expect(cen['m.rb']).toBe(1);
+    expect(cen['n.rb']).toBeCloseTo(2 / 19);
   });
 
   it('同文件混合:超限名字归零、其余名字照常累计', () => {
@@ -145,7 +159,9 @@ import type { Leaf } from '../types.js';
  * 视为词汇噪音,贡献归零。撞语言关键字的叶子名(chatwoot 的 import action 匹配全库 import
  * 语句 9611 次)和大众词(get/new/default)由此消音;5% 阈值实测天然吸收语言关键字停用表
  * (开关结果一字不差),故不维护关键字清单;20 文件下限保护小仓库(umwelt N=68 时 5%=4
- * 会误杀 place_neuron 等真领域名)。实测定稿见 spec:2026-07-14-centrality-generic-cutoff-design.md。
+ * 会误杀 place_neuron 等真领域名)。
+ * df 建表是新增一趟 O(唯一词名×文件数) 遍历,chatwoot 规模(2425 文件)实测中心度约 0.6s→1.2s,仍秒级。
+ * 实测定稿见 spec:2026-07-14-centrality-generic-cutoff-design.md。
  */
 const WORD = /[A-Za-z0-9_]+/g;
 const isWordName = (s: string) => /^[A-Za-z0-9_]+$/.test(s);
@@ -237,12 +253,12 @@ function escapeRe(s: string): string {
 - [ ] **Step 4: 跑测试确认全绿**
 
 Run: `npx vitest run test/centrality.test.ts`
-Expected: PASS,13 条(既有 5 + 新增 8:cutoff 3 条 + 行为 5 条)。
+Expected: PASS,14 条(既有 5 + 新增 9)。
 
 - [ ] **Step 5: 全量测试 + 类型检查**
 
 Run: `npm test`
-Expected: 全绿(62 文件 / 280 测试;此前 272 + 新增 8)。
+Expected: 全绿(62 文件 / 281 测试;此前 272 + 新增 9)。
 
 Run: `npm run typecheck`
 Expected: 零错误。

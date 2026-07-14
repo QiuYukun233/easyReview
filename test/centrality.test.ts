@@ -96,8 +96,9 @@ describe('genericDfCutoff', () => {
     expect(genericDfCutoff(68)).toBe(20);
   });
 
-  it('N=400 恰为 5% 与下限的交界', () => {
+  it('N=400 恰为 5% 与下限的交界,401 起 5% 分支生效', () => {
     expect(genericDfCutoff(400)).toBe(20);
+    expect(genericDfCutoff(401)).toBe(21);
   });
 
   it('大仓库走 ceil(5%)(chatwoot N=2425 → 122)', () => {
@@ -136,14 +137,27 @@ describe('nameFanInCentrality 泛用名截断', () => {
 
   it('非词名(valid?)走正则回退同样受截断', () => {
     const leaves = [leaf('m.rb', 'valid?'), leaf('n.rb', 'compute_thing')];
-    const sources: Record<string, string> = { 'm.rb': 'def valid?; end', 'n.rb': 'def compute_thing; end' };
+    // \bvalid\?\b 要求 ? 后紧跟词字符才有边界(新旧实现一致的既有怪癖),夹具统一用 valid?x 形式
+    const sources: Record<string, string> = { 'm.rb': 'valid?x = 1', 'n.rb': 'def compute_thing; end' };
     for (let i = 1; i <= 20; i++) {
-      sources[`r${i}.rb`] = 'valid? && go' + (i <= 3 ? '; compute_thing' : '');
+      sources[`r${i}.rb`] = 'valid?x && go' + (i <= 3 ? '; compute_thing' : '');
     }
-    // 22 文件,cutoff=20;valid? df=21 → 截断;compute_thing df=4 → 计 3 次
+    // 22 文件,cutoff=20;valid? df=21(m.rb+r1..r20)→ 截断;compute_thing df=4 → 计 3 次
     const cen = nameFanInCentrality(leaves, sources);
     expect(cen['n.rb']).toBe(1);
     expect(cen['m.rb'] ?? 0).toBe(0);
+  });
+
+  it('非词名 df == cutoff 恰好计入(回退路径边界)', () => {
+    const leaves = [leaf('m.rb', 'valid?'), leaf('n.rb', 'compute_thing')];
+    const sources: Record<string, string> = { 'm.rb': 'valid?x = 1', 'n.rb': 'def compute_thing; end' };
+    for (let i = 1; i <= 19; i++) sources[`r${i}.rb`] = 'valid?x && go';
+    sources['r20.rb'] = 'compute_thing';
+    sources['r21.rb'] = 'compute_thing';
+    // 23 文件,cutoff=20;valid? df=20(m.rb+r1..r19)== cutoff → 计入 19 次;compute_thing df=3 → 计 2 次
+    const cen = nameFanInCentrality(leaves, sources);
+    expect(cen['m.rb']).toBe(1);
+    expect(cen['n.rb']).toBeCloseTo(2 / 19);
   });
 
   it('同文件混合:超限名字归零、其余名字照常累计', () => {

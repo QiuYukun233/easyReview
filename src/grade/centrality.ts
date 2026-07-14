@@ -13,7 +13,9 @@ import type { Leaf } from '../types.js';
  * 视为词汇噪音,贡献归零。撞语言关键字的叶子名(chatwoot 的 import action 匹配全库 import
  * 语句 9611 次)和大众词(get/new/default)由此消音;5% 阈值实测天然吸收语言关键字停用表
  * (开关结果一字不差),故不维护关键字清单;20 文件下限保护小仓库(umwelt N=68 时 5%=4
- * 会误杀 place_neuron 等真领域名)。实测定稿见 spec:2026-07-14-centrality-generic-cutoff-design.md。
+ * 会误杀 place_neuron 等真领域名)。
+ * df 建表是新增一趟 O(唯一词名×文件数) 遍历,chatwoot 规模(2425 文件)实测中心度约 0.6s→1.2s,仍秒级。
+ * 实测定稿见 spec:2026-07-14-centrality-generic-cutoff-design.md。
  */
 const WORD = /[A-Za-z0-9_]+/g;
 const isWordName = (s: string) => /^[A-Za-z0-9_]+$/.test(s);
