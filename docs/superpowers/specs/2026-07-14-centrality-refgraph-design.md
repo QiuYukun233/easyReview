@@ -84,7 +84,7 @@ map.md / labels / journey / serve 代码零改动。
 - 既有 62 个测试文件的 Tree 夹具零改动(refsIn 可选);serve/verify/render 零波及。
 - 性能:df 逻辑与 CT 同量级,非词名降为 `re.test`;chatwoot 确定性 map 预期仍 <15s。
 
-## 测试计划(test/centrality.test.ts 重写,~12 条)
+## 测试计划(test/centrality.test.ts 重写,15 条 = 保留 cutoff 3 + 图行为 12)
 
 保留:`genericDfCutoff` 3 条。
 删除:v1 行为 1 条 + naiveReference 对拍 4 条 + CT 截断行为 6 条(锚定 `nameFanInCentrality` 的全部退役)——截断语义由新用例在图规则下重锁。
