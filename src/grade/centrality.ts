@@ -11,6 +11,12 @@ import type { Leaf, Chunk, NodeId, ChunkRefIn } from '../types.js';
  * 差于加权入度(簇内自引环流霸榜),已否,数据留档 spec。身份名撞大众词的核心文件(message.rb)
  * 仍被低估——文本匹配固有局限。尾缀 ?/! 名字的 \b 怪癖原样继承(见 PR #14 spec)。
  * 仍是纯文本 token 级:「解析具体代码是复现阶段做的,不是读代码阶段做的」。
+ *
+ * 隐含约定:sources 与 chunks/leaves 必须同源于同一 inScope 文件集(cli.ts 保证)。sources 多出的
+ * 文件会成为合法引用方(from),但 to 恒为块(definers 只来自 chunks/leaves);两套集合不一致时
+ * refsIn.from 可能指向非块文件——别在别处以不一致的集合调用。
+ * 词边界怪癖(评审实测)比「低估」更重:尾缀 ?/! 名字在真实调用点(后跟空格/括号/分号)基本
+ * 建不了边,只有 valid?x 型后跟词字符的写法能命中——ruby bang/question 方法的扇入接近于零。
  */
 const WORD = /[A-Za-z0-9_]+/g;
 const isWordName = (s: string) => /^[A-Za-z0-9_]+$/.test(s);

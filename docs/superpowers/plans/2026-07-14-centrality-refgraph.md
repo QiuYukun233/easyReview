@@ -31,7 +31,7 @@
 
 ```ts
 import { describe, it, expect } from 'vitest';
-import { referenceGraphCentrality, genericDfCutoff } from '../src/grade/centrality.js';
+import { referenceGraphCentrality, genericDfCutoff, REFS_IN_TOP_K } from '../src/grade/centrality.js';
 import type { Leaf, Chunk } from '../src/types.js';
 
 const leaf = (file: string, name: string): Leaf => ({
@@ -170,7 +170,8 @@ describe('referenceGraphCentrality(引用图加权入度,spec:2026-07-14-central
     for (let i = 1; i <= 11; i++) sources[`f${String(i).padStart(2, '0')}.js`] = 'coreFnA' + (i === 11 ? '; coreFnB' : '');
     const { refsIn } = referenceGraphCentrality(chunks, leaves, sources);
     const list = refsIn['core.js'];
-    expect(list).toHaveLength(10);
+    expect(REFS_IN_TOP_K).toBe(10);
+    expect(list).toHaveLength(REFS_IN_TOP_K);
     expect(list[0]).toEqual({ from: 'f11.js', weight: 2, names: ['coreFnA', 'coreFnB'] }); // 权重最高在前
     expect(list.slice(1).map((r) => r.from)).toEqual(
       ['f01.js', 'f02.js', 'f03.js', 'f04.js', 'f05.js', 'f06.js', 'f07.js', 'f08.js', 'f09.js'],
@@ -243,6 +244,12 @@ import type { Leaf, Chunk, NodeId, ChunkRefIn } from '../types.js';
  * 差于加权入度(簇内自引环流霸榜),已否,数据留档 spec。身份名撞大众词的核心文件(message.rb)
  * 仍被低估——文本匹配固有局限。尾缀 ?/! 名字的 \b 怪癖原样继承(见 PR #14 spec)。
  * 仍是纯文本 token 级:「解析具体代码是复现阶段做的,不是读代码阶段做的」。
+ *
+ * 隐含约定:sources 与 chunks/leaves 必须同源于同一 inScope 文件集(cli.ts 保证)。sources 多出的
+ * 文件会成为合法引用方(from),但 to 恒为块(definers 只来自 chunks/leaves);两套集合不一致时
+ * refsIn.from 可能指向非块文件——别在别处以不一致的集合调用。
+ * 词边界怪癖(评审实测)比「低估」更重:尾缀 ?/! 名字在真实调用点(后跟空格/括号/分号)基本
+ * 建不了边,只有 valid?x 型后跟词字符的写法能命中——ruby bang/question 方法的扇入接近于零。
  */
 const WORD = /[A-Za-z0-9_]+/g;
 const isWordName = (s: string) => /^[A-Za-z0-9_]+$/.test(s);

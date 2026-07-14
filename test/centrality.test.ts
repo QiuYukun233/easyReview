@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { referenceGraphCentrality, genericDfCutoff } from '../src/grade/centrality.js';
+import { referenceGraphCentrality, genericDfCutoff, REFS_IN_TOP_K } from '../src/grade/centrality.js';
 import type { Leaf, Chunk } from '../src/types.js';
 
 const leaf = (file: string, name: string): Leaf => ({
@@ -138,7 +138,8 @@ describe('referenceGraphCentrality(引用图加权入度,spec:2026-07-14-central
     for (let i = 1; i <= 11; i++) sources[`f${String(i).padStart(2, '0')}.js`] = 'coreFnA' + (i === 11 ? '; coreFnB' : '');
     const { refsIn } = referenceGraphCentrality(chunks, leaves, sources);
     const list = refsIn['core.js'];
-    expect(list).toHaveLength(10);
+    expect(REFS_IN_TOP_K).toBe(10);
+    expect(list).toHaveLength(REFS_IN_TOP_K);
     expect(list[0]).toEqual({ from: 'f11.js', weight: 2, names: ['coreFnA', 'coreFnB'] }); // 权重最高在前
     expect(list.slice(1).map((r) => r.from)).toEqual(
       ['f01.js', 'f02.js', 'f03.js', 'f04.js', 'f05.js', 'f06.js', 'f07.js', 'f08.js', 'f09.js'],
