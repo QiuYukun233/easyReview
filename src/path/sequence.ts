@@ -30,9 +30,18 @@ export function buildPath(g: GradedTree): JourneyPath {
     return diff[a.id] - diff[b.id];
   });
 
+  // 邻居三段:真实依赖(refsOut to,权重序)→ 真实被依赖(refsIn from,滤非块)→ 章内其余;按序去重。
+  // 学习路径顺序不动,只富化「顺便看看」;老产物(无 refsIn/refsOut)自动退化为纯章内。
+  const chunkIds = new Set(g.chunks.map((c) => c.id));
   const neighborsOf = (id: NodeId): NodeId[] => {
+    const seen = new Set<NodeId>([id]);
+    const out: NodeId[] = [];
+    const add = (x: NodeId) => { if (!seen.has(x)) { seen.add(x); out.push(x); } };
+    for (const r of g.refsOut?.[id] ?? []) add(r.to);
+    for (const r of g.refsIn?.[id] ?? []) if (chunkIds.has(r.from)) add(r.from);
     const ch = g.chapters.find((c) => c.id === chunkChapter[id]);
-    return ch ? ch.chunkIds.filter((x) => x !== id) : [];
+    for (const x of ch ? ch.chunkIds : []) add(x);
+    return out;
   };
 
   const steps: LearningStep[] = ordered.map((c, i) => ({
