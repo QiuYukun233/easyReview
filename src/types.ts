@@ -33,12 +33,20 @@ export interface ChunkRefIn {
   names: string[];   // 命中的名字,字典序
 }
 
+/** 引用图出边(refsOut;spec:2026-07-15-refsout-design.md) */
+export interface ChunkRefOut {
+  to: NodeId;        // 被依赖的块 id(恒为块)
+  weight: number;    // 与入边同一张边表的权重
+  names: string[];   // 命中的名字,字典序
+}
+
 export interface Tree {
   repo: string;
   chapters: Chapter[];
   chunks: Chunk[];
   leaves: Leaf[];
   refsIn?: Record<NodeId, ChunkRefIn[]>;  // 每块入边 top-10,权重降序;平权 from 字典序
+  refsOut?: Record<NodeId, ChunkRefOut[]>;  // 每块出边 top-10,权重降序;平权 to 字典序
 }
 
 export type RiskBucket = 'none' | 'low' | 'med' | 'high';

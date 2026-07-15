@@ -46,7 +46,7 @@ export async function runMap(opts: MapOptions): Promise<void> {
   }
 
   const ref = referenceGraphCentrality(tree.chunks, tree.leaves, sources);
-  const graded = gradeTree({ ...tree, refsIn: ref.refsIn }, {
+  const graded = gradeTree({ ...tree, refsIn: ref.refsIn, refsOut: ref.refsOut }, {
     relChurn: relativeChurn(log),
     coupling: changeCoupling(log),
     ownership: ownershipConcentration(log),
