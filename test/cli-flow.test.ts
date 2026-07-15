@@ -142,4 +142,14 @@ describe('runFlowTrace(编排:沙箱注入→trace→折叠→落盘→清理)',
     expect(flows.flows.map((f: { id: string; name: string }) => [f.id, f.name]))
       .toEqual([['flow-msg-L55', 'A2'], ['flow-msg-L120', 'B']]);
   });
+
+  it('前导零行号(:007)接受为 7(Number 语义,锁定防将来误改)', async () => {
+    const repo = makeRepo();
+    const out = mkdtempSync(join(tmpdir(), 'er-out-'));
+    const trace = { truncated: false, calls: [{ file: '/app/app/a.rb', method: 'f', line: 1 }] };
+    await runFlowTrace({ repo, outDir: out, specFile: 'spec/msg_spec.rb:007', name: 'x', exec: fakeExec(trace) });
+    const flows = JSON.parse(readFileSync(join(out, 'easyreview.flows.json'), 'utf8'));
+    expect(flows.flows[0].id).toBe('flow-msg-L7');
+    expect(flows.flows[0].source.spec).toBe('spec/msg_spec.rb:7');
+  });
 });

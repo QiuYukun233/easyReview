@@ -19,7 +19,7 @@ export function parseSpecRef(ref: string): SpecRef {
     const tail = ref.slice(i + 1);
     const digits = tail.length > 0 && [...tail].every((ch) => ch >= '0' && ch <= '9');
     if (!digits || Number(tail) < 1) {
-      throw new Error(`行号非法:「${tail}」——用法 spec/xxx_spec.rb:55(正整数行号定位单 example)`);
+      throw new Error(`行号非法:「${tail || '(空)'}」——用法 spec/xxx_spec.rb:55(正整数行号定位单 example)`);
     }
     return { file: ref.slice(0, i), line: Number(tail) };
   }
