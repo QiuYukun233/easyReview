@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { referenceGraphCentrality, genericDfCutoff, REFS_IN_TOP_K } from '../src/grade/centrality.js';
+import { referenceGraphCentrality, genericDfCutoff, REFS_IN_TOP_K, REFS_OUT_TOP_K } from '../src/grade/centrality.js';
 import type { Leaf, Chunk } from '../src/types.js';
 
 const leaf = (file: string, name: string): Leaf => ({
@@ -104,7 +104,7 @@ describe('referenceGraphCentrality(引用图加权入度,spec:2026-07-14-central
     const chunks = [chunk('solo.js')];
     const leaves = [leaf('solo.js', 'me')];
     const sources = { 'solo.js': 'const me = () => me();' };
-    expect(referenceGraphCentrality(chunks, leaves, sources)).toEqual({ centrality: {}, refsIn: {} });
+    expect(referenceGraphCentrality(chunks, leaves, sources)).toEqual({ centrality: {}, refsIn: {}, refsOut: {} });
   });
 
   it('同一引用方多名字:权重累加、names 字典序', () => {
@@ -153,5 +153,63 @@ describe('referenceGraphCentrality(引用图加权入度,spec:2026-07-14-central
     const { centrality, refsIn } = referenceGraphCentrality(chunks, leaves, sources);
     expect(refsIn['m.rb']).toEqual([{ from: 'n.rb', weight: 1, names: ['valid?'] }]);
     expect(centrality['m.rb']).toBe(1);
+  });
+});
+
+describe('refsOut(出边镜像,spec:2026-07-15-refsout-design.md)', () => {
+  it('小夹具无截断时 refsOut 与 refsIn 边集互为转置(from/to 互换,weight/names 一致)', () => {
+    const chunks = [chunk('a.js'), chunk('b.js'), chunk('c.js')];
+    const leaves = [leaf('a.js', 'alphaFn'), leaf('b.js', 'betaFn')];
+    const sources = {
+      'a.js': 'export function alphaFn() {}; betaFn();',
+      'b.js': 'export function betaFn() {}; alphaFn();',
+      'c.js': 'alphaFn(); betaFn();',
+    };
+    const { refsIn, refsOut } = referenceGraphCentrality(chunks, leaves, sources);
+    const inFlat = Object.entries(refsIn).flatMap(([to, list]) =>
+      list.map((r) => ({ from: r.from, to, weight: r.weight, names: r.names })));
+    const outFlat = Object.entries(refsOut).flatMap(([from, list]) =>
+      list.map((r) => ({ from, to: r.to, weight: r.weight, names: r.names })));
+    const key = (e: { from: string; to: string }) => e.from + '->' + e.to;
+    expect(outFlat.slice().sort((x, y) => key(x).localeCompare(key(y))))
+      .toEqual(inFlat.slice().sort((x, y) => key(x).localeCompare(key(y))));
+    expect(outFlat).toHaveLength(4); // a→b, b→a, c→a, c→b
+  });
+
+  it('from 非块(sources 多出的文件)不进 refsOut,但仍进 refsIn', () => {
+    const chunks = [chunk('lib.js')];
+    const leaves = [leaf('lib.js', 'thingFn')];
+    const sources = { 'lib.js': 'export function thingFn() {}', 'stray.js': 'thingFn();' };
+    const { refsIn, refsOut } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['lib.js']).toEqual([{ from: 'stray.js', weight: 1, names: ['thingFn'] }]);
+    expect(Object.keys(refsOut)).toEqual([]);
+  });
+
+  it('出边 top-10 截断:权重降序、平权 to 字典序', () => {
+    // hub.js 引用 11 个定义块:d11 定义两个名字(weight 2)排首位,d01..d09 平权字典序,d10 被截
+    const files = Array.from({ length: 11 }, (_, i) => 'd' + String(i + 1).padStart(2, '0') + '.js');
+    const chunks = [...files.map(chunk), chunk('hub.js')];
+    const leaves = files.map((f, i) => leaf(f, 'fn' + String(i + 1).padStart(2, '0')));
+    leaves.push(leaf('d11.js', 'extraFn'));
+    const sources: Record<string, string> = { 'hub.js': leaves.map((l) => l.name + '();').join(' ') };
+    for (const f of files) sources[f] = 'define';
+    const { refsOut } = referenceGraphCentrality(chunks, leaves, sources);
+    const out = refsOut['hub.js'];
+    expect(out).toHaveLength(10);
+    expect(out[0]).toEqual({ to: 'd11.js', weight: 2, names: ['extraFn', 'fn11'] });
+    expect(out.slice(1).map((r) => r.to)).toEqual(files.slice(0, 9));
+    expect(out.map((r) => r.to)).not.toContain('d10.js');
+  });
+
+  it('同边多名字聚合:names 字典序', () => {
+    const chunks = [chunk('util.js'), chunk('main.js')];
+    const leaves = [leaf('util.js', 'zipFn'), leaf('util.js', 'alphaFn')];
+    const sources = { 'util.js': 'x', 'main.js': 'zipFn(); alphaFn();' };
+    const { refsOut } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsOut['main.js']).toEqual([{ to: 'util.js', weight: 2, names: ['alphaFn', 'zipFn'] }]);
+  });
+
+  it('REFS_OUT_TOP_K 锁 10(UI「前 10」文案依赖此值)', () => {
+    expect(REFS_OUT_TOP_K).toBe(10);
   });
 });

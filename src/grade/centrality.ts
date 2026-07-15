@@ -1,4 +1,4 @@
-import type { Leaf, Chunk, NodeId, ChunkRefIn } from '../types.js';
+import type { Leaf, Chunk, NodeId, ChunkRefIn, ChunkRefOut } from '../types.js';
 
 /**
  * v2 引用图中心度(2026-07-14,设计 spec:2026-07-14-centrality-refgraph-design.md):
@@ -24,6 +24,7 @@ const isWordName = (s: string) => /^[A-Za-z0-9_]+$/.test(s);
 export const GENERIC_DF_RATIO = 0.05;
 export const GENERIC_DF_FLOOR = 20;
 export const REFS_IN_TOP_K = 10;
+export const REFS_OUT_TOP_K = 10;
 
 export function genericDfCutoff(fileCount: number): number {
   return Math.max(Math.ceil(fileCount * GENERIC_DF_RATIO), GENERIC_DF_FLOOR);
@@ -36,6 +37,7 @@ const camelize = (s: string) =>
 export interface ReferenceGraphResult {
   centrality: Record<NodeId, number>;
   refsIn: Record<NodeId, ChunkRefIn[]>;
+  refsOut: Record<NodeId, ChunkRefOut[]>;
 }
 
 export function referenceGraphCentrality(
@@ -97,11 +99,17 @@ export function referenceGraphCentrality(
   const inDeg: Record<string, number> = {};
   for (const c of chunks) inDeg[c.file] = 0;
   const inEdges = new Map<string, ChunkRefIn[]>();
+  const chunkFiles = new Set(chunks.map((c) => c.file));
+  const outEdges = new Map<string, ChunkRefOut[]>();
   for (const [k, w] of weights) {
     const [from, to] = k.split('\u0000');
     inDeg[to] = (inDeg[to] ?? 0) + w;
     if (!inEdges.has(to)) inEdges.set(to, []);
     inEdges.get(to)!.push({ from, weight: w, names: edgeNames.get(k)!.slice().sort() });
+    if (chunkFiles.has(from)) { // 出边仅记块(镜像「to 恒为块」;cli 下 sources 与块同源,此为防御)
+      if (!outEdges.has(from)) outEdges.set(from, []);
+      outEdges.get(from)!.push({ to, weight: w, names: edgeNames.get(k)!.slice().sort() });
+    }
   }
 
   const max = Math.max(0, ...Object.values(inDeg));
@@ -113,7 +121,12 @@ export function referenceGraphCentrality(
     list.sort((a, b) => b.weight - a.weight || (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
     refsIn[to] = list.slice(0, REFS_IN_TOP_K);
   }
-  return { centrality, refsIn };
+  const refsOut: Record<NodeId, ChunkRefOut[]> = {};
+  for (const [from, list] of outEdges) {
+    list.sort((a, b) => b.weight - a.weight || (a.to < b.to ? -1 : a.to > b.to ? 1 : 0));
+    refsOut[from] = list.slice(0, REFS_OUT_TOP_K);
+  }
+  return { centrality, refsIn, refsOut };
 }
 
 function escapeRe(s: string): string {
