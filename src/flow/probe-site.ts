@@ -22,10 +22,13 @@ export async function pickSiteInMethods(
   const lines = source.split('\n');
   try {
     const methods = collectMethodNodes(tree.rootNode);
+    const nameOf = (n: Parser.SyntaxNode): string => n.childForFieldName('name')?.text ?? '';
     for (const d of defLines) {
-      const node =
-        methods.find((n) => n.startPosition.row + 1 === d.line) ??
-        methods.find((n) => n.startPosition.row + 1 <= d.line && n.endPosition.row + 1 >= d.line);
+      const exact = methods.filter((n) => n.startPosition.row + 1 === d.line);
+      const containing = methods.filter((n) => n.startPosition.row + 1 <= d.line && n.endPosition.row + 1 >= d.line);
+      // 定义行精确匹配(TracePoint 的 line 即 def 行)优先同名;范围包含**仅接受同名**——
+      // 嵌套 def 场景下按行包含会误归外层方法,宁可返回 null 走诚实回退也不冒认。
+      const node = exact.find((n) => nameOf(n) === d.method) ?? exact[0] ?? containing.find((n) => nameOf(n) === d.method);
       if (!node) continue;
       const startRow = node.startPosition.row;
       const slice = lines.slice(startRow, node.endPosition.row + 1).join('\n');

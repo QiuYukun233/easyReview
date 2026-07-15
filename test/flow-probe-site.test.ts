@@ -43,4 +43,24 @@ describe('pickSiteInMethods(流程命中方法体内落刀,spec §4)', () => {
     const site = await pickSiteInMethods(RUBY_SRC, [{ method: 'empty_guard', line: 10 }]);
     expect(site).toBeNull();
   });
+
+  it('单例方法(def self.x)也能定位落刀', async () => {
+    const src = ['class Foo', '  def self.build', '    make_it(2)', '  end', 'end'].join('\n');
+    const site = await pickSiteInMethods(src, [{ method: 'build', line: 2 }]);
+    expect(site).toEqual({ line: 3, original: '    make_it(2)', scope: 'method', method: 'build' });
+  });
+
+  it('嵌套 def:范围包含只接受同名——内层被正确定位而非误归外层', async () => {
+    const src = ['def outer', '  setup_thing', '  def inner', '    inner_call(3)', '  end', 'end'].join('\n');
+    const site = await pickSiteInMethods(src, [{ method: 'inner', line: 4 }]);
+    expect(site!.method).toBe('inner');
+    expect(site!.line).toBe(4);
+    expect(site!.original).toBe('    inner_call(3)');
+  });
+
+  it('范围包含但无同名方法 → 不冒认,返回 null(调用方回退并标注)', async () => {
+    const src = ['def outer', '  setup_thing', 'end'].join('\n');
+    const site = await pickSiteInMethods(src, [{ method: 'ghost', line: 2 }]);
+    expect(site).toBeNull();
+  });
 });
