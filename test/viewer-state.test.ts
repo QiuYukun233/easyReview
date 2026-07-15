@@ -93,6 +93,7 @@ describe('buildViewerState refsOut(它依赖谁)', () => {
     expect(s.hasRefs).toBe(true);
     expect(s.hasRefsOut).toBe(false);
     expect(s.chunks[B].refsOut).toEqual([]);
+    expect(s.chunks[C].refsOut).toEqual([]);
   });
 
   it('全无的老产物 → 双旗标 false', () => {
