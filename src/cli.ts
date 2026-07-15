@@ -132,18 +132,38 @@ if (cmd === 'verify') {
 
 if (cmd === 'flow') {
   const rest = process.argv.slice(3);
-  const specFile = rest.find((a, i) => i > 0 && !a.startsWith('--') && !(rest[i - 1] ?? '').startsWith('--'));
-  const ni = rest.indexOf('--name');
-  const name = ni >= 0 && rest[ni + 1] ? rest[ni + 1] : null;
-  if (rest[0] !== 'trace' || !specFile || !name) {
-    console.error('用法: easyreview flow trace <specFile> --name "<流程名>" [--repo <p>] [--out <d>]');
+  const sub = rest[0];
+  const positional = rest.find((a, i) => i > 0 && !a.startsWith('--') && !(rest[i - 1] ?? '').startsWith('--'));
+  if (sub === 'trace') {
+    const ni = rest.indexOf('--name');
+    const name = ni >= 0 && rest[ni + 1] ? rest[ni + 1] : null;
+    if (!positional || !name) {
+      console.error('用法: easyreview flow trace <specFile[:行号]> --name "<流程名>" [--repo <p>] [--out <d>]');
+      process.exit(1);
+    }
+    const { repo, outDir } = parseArgs(rest);
+    import('./cli-flow.js').then(({ runFlowTrace }) =>
+      runFlowTrace({ repo, outDir, specFile: positional, name })
+        .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
+    );
+  } else if (sub === 'probe') {
+    const si = rest.indexOf('--step');
+    const step = si >= 0 && rest[si + 1] ? Number(rest[si + 1]) : NaN;
+    const pi2 = rest.indexOf('--predict');
+    const predict = pi2 >= 0 && rest[pi2 + 1] ? rest[pi2 + 1] : '';
+    if (!positional || !predict || Number.isNaN(step)) {
+      console.error('用法: easyreview flow probe <flowId> --step <N> --predict red|green [--repo <p>] [--out <d>]');
+      process.exit(1);
+    }
+    const { repo, outDir } = parseArgs(rest);
+    import('./cli-flow.js').then(({ runFlowProbe }) =>
+      runFlowProbe({ repo, outDir, flowId: positional, step, predict })
+        .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
+    );
+  } else {
+    console.error('用法: easyreview flow trace <specFile[:行号]> --name "<名>" | flow probe <flowId> --step <N> --predict red|green');
     process.exit(1);
   }
-  const { repo, outDir } = parseArgs(rest);
-  import('./cli-flow.js').then(({ runFlowTrace }) =>
-    runFlowTrace({ repo, outDir, specFile, name })
-      .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
-  );
 }
 
 if (cmd === 'serve') {
