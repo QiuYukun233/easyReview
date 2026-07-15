@@ -5,7 +5,7 @@ import { sandboxFor, syncSandbox } from './verify/sandbox.js';
 import { realExec, type Exec } from './verify/cargo.js';
 import { TRACER_RB, foldTrace, type RawCall } from './flow/trace.js';
 import { loadFlows, saveFlows, upsertFlow } from './flow/flows.js';
-import { withMutation } from './verify/mutate.js';
+import { withMutation, chooseMutation } from './verify/mutate.js';
 import { parseRspecJson } from './verify/rspec-parse.js';
 import { pickSiteInMethods, type ProbeSite } from './flow/probe-site.js';
 import { judgeProbe, renderProbeMd, type ProbePrediction } from './flow/probe.js';
@@ -108,6 +108,9 @@ export async function runFlowProbe(o: FlowProbeOpts): Promise<void> {
     throw new Error(`--step 越界:${o.step}(该流程共 ${flow.steps.length} 步)`);
   }
   const target = flow.steps[o.step - 1];
+  if (!target.chunkId.endsWith('.rb')) {
+    throw new Error(`第 ${o.step} 步 ${target.chunkId} 非 Ruby 文件——流程探针目前只支持 rspec 可执行的 .rb 步(前端步靠 vitest 探针,见 verify)`);
+  }
   const config = loadRubyRunnerConfig(o.repo);
   const sb = sandboxFor(o.repo);
   console.error('⏳ 同步沙箱…');
@@ -124,19 +127,20 @@ export async function runFlowProbe(o: FlowProbeOpts): Promise<void> {
   }
   let site: ProbeSite | null = await pickSiteInMethods(source, defLines);
   let fallback = false;
+  let fallbackOp: MutationOp | null = null;
   if (!site) {
     // 回退:文件级既有 chooseMutation(报告显式标注)
-    const { chooseMutation } = await import('./verify/mutate.js');
-    const op = await chooseMutation(
+    const fbOp = await chooseMutation(
       { id: target.chunkId, name: target.chunkId, file: target.chunkId, crate: '', leafIds: [] }, [], source);
-    if (!op) throw new Error(`${target.chunkId} 找不到可注释的探针位点——换一步(与 verify 的 uncovered 先例一致)`);
-    site = { line: op.line, original: op.original, scope: 'file-fallback' };
+    if (!fbOp) throw new Error(`${target.chunkId} 找不到可注释的探针位点——换一步(与 verify 的 uncovered 先例一致)`);
+    site = { line: fbOp.line, original: fbOp.original, scope: 'file-fallback' };
     fallback = true;
+    fallbackOp = fbOp; // 复用 chooseMutation 的语言感知 mutated
   }
   const indent = site.original.slice(0, site.original.length - site.original.trimStart().length);
-  const op: MutationOp = {
+  const op: MutationOp = fallbackOp ?? {
     file: target.chunkId, line: site.line, original: site.original,
-    mutated: indent + '# ' + site.original.trim(),
+    mutated: indent + '# ' + site.original.trim(), // 主路径:方法体内已保证 .rb(见上方断言)
     description: `flow probe:斩「${flow.name}」第 ${o.step} 步`,
   };
   console.error(`⏳ 斩第 ${o.step} 步(${target.chunkId}:${site.line}${site.method ? ' · ' + site.method : ''})并重跑单 example…`);
