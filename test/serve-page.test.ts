@@ -66,4 +66,11 @@ describe('renderPage', () => {
     expect(html).toContain('它依赖谁');
     expect(html).toContain('只统计仓内块之间的引用');
   });
+
+  it('hidden 属性守卫:作者 display 声明不得压过 [hidden](抽屉常驻可见 bug 的回归锁)', () => {
+    const html = renderPage();
+    // UA 的 [hidden]{display:none} 会被作者 display:flex/grid 压过——#drawer/#grid 都踩过。
+    // 守卫必须存在且带 !important,否则抽屉自加载起常驻、盖住贡献度「高」列与右侧面板。
+    expect(html).toContain('[hidden] { display: none !important; }');
+  });
 });
