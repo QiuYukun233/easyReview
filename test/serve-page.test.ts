@@ -67,6 +67,20 @@ describe('renderPage', () => {
     expect(html).toContain('只统计仓内块之间的引用');
   });
 
+  it('flows: 第三 Tab 与容器都在,仍自包含', () => {
+    const html = renderPage();
+    expect(html).toContain('id="tab-flows"');
+    expect(html).toContain('id="flows"');
+    expect(html).not.toContain('src=');
+  });
+
+  it('flows: 流程文案/来源标注/步骤跳转类都在', () => {
+    const html = renderPage();
+    expect(html).toContain('rspec 真跑采集');
+    expect(html).toContain('flow-jump');
+    expect(html).toContain('renderFlows');
+  });
+
   it('hidden 属性守卫:作者 display 声明不得压过 [hidden](抽屉常驻可见 bug 的回归锁)', () => {
     const html = renderPage();
     // UA 的 [hidden]{display:none} 会被作者 display:flex/grid 压过——#drawer/#grid 都踩过。

@@ -130,6 +130,22 @@ if (cmd === 'verify') {
   }
 }
 
+if (cmd === 'flow') {
+  const rest = process.argv.slice(3);
+  const specFile = rest.find((a, i) => i > 0 && !a.startsWith('--') && !(rest[i - 1] ?? '').startsWith('--'));
+  const ni = rest.indexOf('--name');
+  const name = ni >= 0 && rest[ni + 1] ? rest[ni + 1] : null;
+  if (rest[0] !== 'trace' || !specFile || !name) {
+    console.error('用法: easyreview flow trace <specFile> --name "<流程名>" [--repo <p>] [--out <d>]');
+    process.exit(1);
+  }
+  const { repo, outDir } = parseArgs(rest);
+  import('./cli-flow.js').then(({ runFlowTrace }) =>
+    runFlowTrace({ repo, outDir, specFile, name })
+      .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
+  );
+}
+
 if (cmd === 'serve') {
   const rest = process.argv.slice(3);
   const { outDir } = parseArgs(rest);

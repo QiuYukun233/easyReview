@@ -59,6 +59,13 @@ main { display: flex; gap: 16px; padding: 16px 20px; align-items: flex-start; }
 .dot.next { background: var(--next); }
 .dot.selected { outline: 2px solid var(--accent); }
 #legend { margin-top: 10px; color: var(--muted); font-size: 12px; }
+#flows { max-width: 720px; }
+.flow-card { border: 1px solid var(--border); border-radius: 10px; background: var(--panel-bg); padding: 12px 16px; margin-bottom: 12px; }
+.flow-card h3 { margin: 0 0 6px; font-size: 14px; }
+.flow-step { display: flex; gap: 8px; padding: 3px 0; align-items: baseline; }
+.flow-step .no { color: var(--muted); flex: none; width: 34px; text-align: right; }
+.flow-step .hits { color: var(--muted); font-size: 12px; }
+.flow-step code { font: 12px ui-monospace, monospace; color: var(--muted); }
 #tree { font-family: ui-monospace, monospace; font-size: 13px; }
 .tree-dir { cursor: pointer; padding: 2px 0; user-select: none; }
 .tree-dir .cnt { color: var(--muted); font-size: 12px; }
@@ -113,6 +120,7 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
   <nav id="tabs">
     <button id="tab-grid">网格</button>
     <button id="tab-tree">文件树</button>
+    <button id="tab-flows" hidden>流程</button>
   </nav>
   <div id="progress-wrap">
     <div id="progress-bar"><div id="progress-fill"></div></div>
@@ -126,6 +134,7 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
   <section id="map">
     <div id="grid"></div>
     <div id="tree" hidden></div>
+    <div id="flows" hidden></div>
     <div id="legend"></div>
   </section>
   <aside id="panel"></aside>
@@ -143,7 +152,7 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
 'use strict';
 var state = null;
 var selectedId = null; // null = 面板显示"下一步"
-var view = localStorage.getItem('easyreview-view') === 'tree' ? 'tree' : 'grid';
+var view = ['tree', 'flows'].indexOf(localStorage.getItem('easyreview-view')) >= 0 ? localStorage.getItem('easyreview-view') : 'grid';
 var collapsedRows = loadSet('easyreview-collapsed-rows');
 var collapsedDirs = loadSet('easyreview-collapsed-dirs');
 var drawerId = null;
@@ -161,6 +170,7 @@ var RISK_CN = { high: '高', med: '中', low: '低', none: '无' };
 var CONTRIB_CN = { filler: '填充', low: '低', med: '中', high: '高' };
 var GRID_LEGEND = '■ 灰=未学 · <span style="color:var(--lit)">■</span> 绿=已理解 · 绿框=已验证 · <span style="color:var(--next)">■</span> 黄=下一步 · 行=风险(高→无) 列=贡献度(填充→高) · 点行头折叠该行';
 var TREE_LEGEND = '● 风险色点(红高/橙中/黄低/灰无) · <span class="tick">✓</span>=已理解 <span class="tick">✓✓</span>=已验证 · 点目录折叠,点文件看源码';
+var FLOWS_LEGEND = '纵向切片:一条真实业务流程的执行链(rspec 真跑采集,非静态猜测)· 步骤=文件首现序 · ×N=命中次数 · 点步骤看源码';
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;'); }
@@ -214,17 +224,21 @@ function markDone(id) {
 function render() {
   renderProgress();
   renderTabs();
-  if (view === 'grid') renderGrid(); else renderTree();
+  if (view === 'grid') renderGrid(); else if (view === 'tree') renderTree(); else renderFlows();
   renderPanel();
   if (drawerId) { renderDrawerHead(); renderDrawerFns(); renderDrawerRefs(); renderDrawerRefsOut(); } // done 后按钮/✓ 即时更新
 }
 
 function renderTabs() {
+  if (view === 'flows' && !state.hasFlows) { view = 'grid'; localStorage.setItem('easyreview-view', view); } // 回退必须先于 className 读 view
   $('tab-grid').className = view === 'grid' ? 'active' : '';
   $('tab-tree').className = view === 'tree' ? 'active' : '';
+  $('tab-flows').className = view === 'flows' ? 'active' : '';
+  $('tab-flows').hidden = !state.hasFlows;
   $('grid').hidden = view !== 'grid';
   $('tree').hidden = view !== 'tree';
-  $('legend').innerHTML = view === 'grid' ? GRID_LEGEND : TREE_LEGEND;
+  $('flows').hidden = view !== 'flows';
+  $('legend').innerHTML = view === 'grid' ? GRID_LEGEND : (view === 'tree' ? TREE_LEGEND : FLOWS_LEGEND);
 }
 
 function renderProgress() {
@@ -343,6 +357,37 @@ function renderTree() {
   for (var j = 0; j < files.length; j++) {
     files[j].addEventListener('click', function (ev) {
       selectedId = ev.currentTarget.getAttribute('data-id');
+      openDrawer(selectedId);
+      render();
+    });
+  }
+}
+
+// ── 流程视图(纵向切片,easyreview.flows.json;hasFlows=false 时 Tab 不出现) ──
+function renderFlows() {
+  var html = '';
+  for (var i = 0; i < state.flows.length; i++) {
+    var f = state.flows[i];
+    html += '<div class="flow-card"><h3>' + esc(f.name) + '</h3>';
+    html += '<div class="muted">来源:rspec 真跑采集(' + esc(f.spec) + ')</div>';
+    if (!f.steps.length) html += '<div class="muted">(此流程没有步骤——flows.json 可能被手工改动,重跑 flow trace 重采)</div>';
+    for (var j = 0; j < f.steps.length; j++) {
+      var s = f.steps[j];
+      var c = state.chunks[s.chunkId];
+      var label = c
+        ? '<span class="nb flow-jump" data-ref="' + esc(s.chunkId) + '" title="' + esc(s.chunkId) + '">' + esc(c.name) + '</span>'
+        : '<span class="muted" title="' + esc(s.chunkId) + '">' + esc(s.chunkId.split('/').pop()) + '</span>';
+      html += '<div class="flow-step"><span class="no">' + (j + 1) + '.</span>' + label +
+        ' <code>' + esc(s.methods.slice(0, 3).join(', ')) + '</code>' +
+        ' <span class="hits">×' + s.hits + '</span></div>';
+    }
+    html += '</div>';
+  }
+  $('flows').innerHTML = html;
+  var els = $('flows').querySelectorAll('.flow-jump');
+  for (var k = 0; k < els.length; k++) {
+    els[k].addEventListener('click', function (ev) {
+      selectedId = ev.currentTarget.getAttribute('data-ref');
       openDrawer(selectedId);
       render();
     });
@@ -649,6 +694,7 @@ function renderPanel() {
 // ── 全局交互 ──
 $('tab-grid').addEventListener('click', function () { view = 'grid'; localStorage.setItem('easyreview-view', view); render(); });
 $('tab-tree').addEventListener('click', function () { view = 'tree'; localStorage.setItem('easyreview-view', view); render(); });
+$('tab-flows').addEventListener('click', function () { view = 'flows'; localStorage.setItem('easyreview-view', view); render(); });
 function renderInterpToggle() {
   $('interp-toggle').className = interpOn ? '' : 'off';
   $('interp-toggle').textContent = interpOn ? '✨ 解读:开' : '✨ 解读:关';

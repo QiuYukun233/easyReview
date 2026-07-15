@@ -1,4 +1,4 @@
-import type { GradedTree, LabelCache, Progress, NodeId, RiskBucket, ContribBucket } from '../types.js';
+import type { GradedTree, LabelCache, Progress, NodeId, RiskBucket, ContribBucket, FlowsFile, FlowStep } from '../types.js';
 import { buildPath } from '../path/sequence.js';
 import { whyNow } from '../render/journey-md.js';
 
@@ -23,12 +23,14 @@ export interface ViewerState {
   nextId: NodeId | null;
   hasRefs: boolean; // tree.refsIn 是否存在;false=老产物两处不渲染(区别于"有数据但此块无入边")
   hasRefsOut: boolean; // tree.refsOut 是否存在;仅 refsIn 的中间期产物此旗标 false
+  flows: { id: string; name: string; spec: string; steps: FlowStep[] }[]; // rawTrace 不出前端
+  hasFlows: boolean; // 有至少一条流程才渲染 Tab
 }
 
 const RISK_ROWS: RiskBucket[] = ['high', 'med', 'low', 'none'];
 const CONTRIB_COLS: ContribBucket[] = ['filler', 'low', 'med', 'high'];
 
-export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Progress): ViewerState {
+export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Progress, flowsFile?: FlowsFile | null): ViewerState {
   const path = buildPath(g);
   const understood = new Set(progress.understood);
   const verified = new Set(progress.verified ?? []);
@@ -63,6 +65,7 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
   }
 
   const pathIds = path.steps.map((s) => s.chunkId);
+  const flowList = flowsFile?.flows ?? [];
   return {
     generatedAt: new Date().toISOString(),
     progress: {
@@ -76,5 +79,7 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
     nextId: pathIds.find((id) => !understood.has(id)) ?? null,
     hasRefs: g.refsIn !== undefined,
     hasRefsOut: g.refsOut !== undefined,
+    flows: flowList.map((f) => ({ id: f.id, name: f.name, spec: f.source.spec, steps: f.steps })),
+    hasFlows: flowList.length > 0,
   };
 }
