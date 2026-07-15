@@ -373,6 +373,8 @@ function renderFlows() {
     html += '<div class="flow-card"><h3>' + esc(f.name) + '</h3>';
     html += '<div class="muted">来源:rspec 真跑采集(' + esc(f.spec) + ')</div>';
     if (!f.steps.length) html += '<div class="muted">(此流程没有步骤——flows.json 可能被手工改动,重跑 flow trace 重采)</div>';
+    // 依赖 foldTrace 契约(src/flow/trace.ts):steps 恒为 [setup...,request...] 连续段——
+    // setupCount 折叠头、j===setupCount 分隔线、折叠跳过 三处都建立在这个不变式上,改重排规则必须同步这里。
     var setupCount = 0;
     for (var m = 0; m < f.steps.length; m++) if (f.steps[m].phase === 'setup') setupCount++;
     if (setupCount) {
