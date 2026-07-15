@@ -21,22 +21,27 @@ export async function runFlowTrace(o: FlowTraceOpts): Promise<void> {
   }
   const config = loadRubyRunnerConfig(o.repo);
   const sb = sandboxFor(o.repo);
-  console.log('⏳ 同步沙箱…');
+  console.error('⏳ 同步沙箱…');
   syncSandbox(o.repo, sb.srcDir);
   if (!existsSync(join(sb.srcDir, o.specFile))) throw new Error(`仓里没有 ${o.specFile}`);
   writeFileSync(join(sb.srcDir, TRACER_NAME), TRACER_RB);
   try {
-    console.log('⏳ 跑 rspec + TracePoint(docker 冷启动可能较慢)…');
+    console.error('⏳ 跑 rspec + TracePoint(docker 冷启动可能较慢)…');
     const [cmd, ...args] = expandCmd(config.cmd, ['-r./' + TRACER_NAME, o.specFile]);
     await (o.exec ?? realExec)(cmd, args, sb.srcDir);
     const tracePath = join(sb.srcDir, TRACE_OUT);
     if (!existsSync(tracePath)) {
       throw new Error('trace 输出不存在——rspec 可能在加载期崩了或进程被超时杀死(at_exit 没跑到);先手跑该 spec 确认环境(配方:docs/recipes/chatwoot-rspec.md)');
     }
-    const raw = JSON.parse(readFileSync(tracePath, 'utf8')) as { truncated: boolean; calls: RawCall[] };
+    let raw: { truncated: boolean; calls: RawCall[] };
+    try {
+      raw = JSON.parse(readFileSync(tracePath, 'utf8')) as { truncated: boolean; calls: RawCall[] };
+    } catch {
+      throw new Error('trace 输出损坏(非法 JSON)——容器可能在落盘中途被杀,重跑一次;反复出现则先手跑该 spec 确认环境');
+    }
     const steps = foldTrace(raw.calls);
     if (!steps.length) throw new Error('trace 没有触达 app/ 代码——换一条 request/controller spec');
-    if (raw.truncated) console.log('⚠ trace 达上限被截断——首现序步链仍可用,hits 偏低');
+    if (raw.truncated) console.error('⚠ trace 达上限被截断——首现序步链仍可用,hits 偏低');
     const flow = {
       id: 'flow-' + o.specFile.split('/').pop()!.replace('_spec.rb', ''),
       name: o.name,
@@ -45,6 +50,7 @@ export async function runFlowTrace(o: FlowTraceOpts): Promise<void> {
       rawTrace: raw.calls,
     };
     saveFlows(o.outDir, upsertFlow(loadFlows(o.outDir), flow));
+    // 成功横幅在编排层打印(不走 cli.ts 的 .then 收口):横幅要用 steps.length,cli.ts 拿不到
     console.log(`✓ flow 「${o.name}」:${steps.length} 步已写入 easyreview.flows.json`);
   } finally {
     for (const f of [TRACER_NAME, TRACE_OUT]) {

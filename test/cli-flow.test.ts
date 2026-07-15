@@ -18,7 +18,8 @@ function makeRepo(): string {
   return repo;
 }
 
-/** fake exec:模拟容器侧 tracer 落盘(写沙箱根的 easyreview-trace.json)。 */
+/** fake exec:同步写文件模拟「容器内 tracer at_exit 落盘、经挂载对宿主可见」——只测编排逻辑,
+ *  不测容器时序/挂载/TracePoint 本身(那些靠真仓验收,spec §9)。 */
 const fakeExec = (trace: unknown): Exec => async (_cmd, _args, cwd) => {
   writeFileSync(join(cwd, 'easyreview-trace.json'), JSON.stringify(trace));
   return 'ok';
@@ -67,5 +68,26 @@ describe('runFlowTrace(编排:沙箱注入→trace→折叠→落盘→清理)',
       repo, outDir: repo, specFile: 'spec/msg_spec.rb', name: 'x',
       exec: fakeExec({ truncated: false, calls: [{ file: '/gems/x.rb', method: 'f', line: 1 }] }),
     })).rejects.toThrow('没有触达 app/ 代码');
+  });
+
+  it('同 spec 重跑 → 覆盖旧流程而非追加(用户改代码后重采链的常见路径)', async () => {
+    const repo = makeRepo();
+    const out = mkdtempSync(join(tmpdir(), 'er-out-'));
+    const trace = { truncated: false, calls: [{ file: '/app/app/a.rb', method: 'f', line: 1 }] };
+    await runFlowTrace({ repo, outDir: out, specFile: 'spec/msg_spec.rb', name: '旧名', exec: fakeExec(trace) });
+    await runFlowTrace({ repo, outDir: out, specFile: 'spec/msg_spec.rb', name: '新名', exec: fakeExec(trace) });
+    const flows = JSON.parse(readFileSync(join(out, 'easyreview.flows.json'), 'utf8'));
+    expect(flows.flows).toHaveLength(1);
+    expect(flows.flows[0].name).toBe('新名');
+  });
+
+  it('trace 文件存在但非法 JSON → 友好报损坏', async () => {
+    const repo = makeRepo();
+    const halfWrite: Exec = async (_c, _a, cwd) => {
+      writeFileSync(join(cwd, 'easyreview-trace.json'), '{"truncated":false,"calls":[{');
+      return 'killed';
+    };
+    await expect(runFlowTrace({ repo, outDir: repo, specFile: 'spec/msg_spec.rb', name: 'x', exec: halfWrite }))
+      .rejects.toThrow('trace 输出损坏');
   });
 });
