@@ -102,3 +102,31 @@ describe('buildViewerState refsOut(它依赖谁)', () => {
     expect(s.hasRefsOut).toBe(false);
   });
 });
+
+describe('buildViewerState flows(纵向切割,spec §7)', () => {
+  const FLOWS = { version: 1 as const, flows: [{
+    id: 'flow-msg', name: '发消息',
+    source: { kind: 'rspec-trace' as const, spec: 'spec/m_spec.rb', tracedAt: '2026-07-15T00:00:00Z' },
+    steps: [{ chunkId: A, methods: ['f1'], hits: 2 }],
+    rawTrace: [{ file: '/app/app/x.rb', method: 'f1', line: 1 }],
+  }] };
+
+  it('flows 进 state:steps/名字/来源 spec 保留,rawTrace 不出(payload 卫生)', () => {
+    const s = buildViewerState(makeViewerTree(), makeViewerLabels(), { version: 1, understood: [] }, FLOWS);
+    expect(s.hasFlows).toBe(true);
+    expect(s.flows).toEqual([{ id: 'flow-msg', name: '发消息', spec: 'spec/m_spec.rb',
+      steps: [{ chunkId: A, methods: ['f1'], hits: 2 }] }]);
+  });
+
+  it('第 4 参缺省(既有调用方)→ hasFlows=false 且 flows=[]', () => {
+    const s = buildViewerState(makeViewerTree(), makeViewerLabels(), { version: 1, understood: [] });
+    expect(s.hasFlows).toBe(false);
+    expect(s.flows).toEqual([]);
+  });
+
+  it('空 flows 文件 → hasFlows=false(Tab 不该出现)', () => {
+    const s = buildViewerState(makeViewerTree(), makeViewerLabels(), { version: 1, understood: [] },
+      { version: 1, flows: [] });
+    expect(s.hasFlows).toBe(false);
+  });
+});

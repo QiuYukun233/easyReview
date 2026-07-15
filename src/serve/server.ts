@@ -6,6 +6,7 @@ import { loadLabelCache } from '../label/cache.js';
 import { loadProgress } from '../progress/progress.js';
 import { makeInterpreterFromEnv } from '../interpret/deepseek.js';
 import { buildViewerState } from './state.js';
+import { loadFlows } from '../flow/flows.js';
 import { applyDone } from './done.js';
 import { readSource } from './source.js';
 import { applyInterpret, type InterpretResult } from './interpret.js';
@@ -71,7 +72,7 @@ async function handle(
     const tree = loadTreeOrThrow(outDir);
     const labels = loadLabelCache(join(outDir, 'easyreview.labels.json'));
     const progress = loadProgress(join(outDir, 'easyreview.progress.json'));
-    sendJson(res, 200, buildViewerState(tree, labels, progress));
+    sendJson(res, 200, buildViewerState(tree, labels, progress, loadFlows(outDir)));
     return;
   }
 
