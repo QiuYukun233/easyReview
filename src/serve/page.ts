@@ -153,7 +153,7 @@ var srcCache = {}; // chunkId → /api/source body(本页生命周期内缓存)
 var interpOn = localStorage.getItem('easyreview-interpret') !== 'off'; // 默认开
 var interpCollapsed = localStorage.getItem('easyreview-interpret-collapsed') === 'yes';
 var refsCollapsed = localStorage.getItem('easyreview-refs-collapsed') !== 'no'; // 默认折叠(不挤源码空间)
-var refsOutCollapsed = localStorage.getItem('easyreview-refsout-collapsed') !== 'no'; // 默认折叠
+var refsOutCollapsed = localStorage.getItem('easyreview-refs-out-collapsed') !== 'no'; // 默认折叠
 var interp = {}; // chunkId → { st: 'loading'|'ok'|'nokey'|'err', data?, msg? }(本页生命周期缓存)
 
 var RISK_CN = { high: '高', med: '中', low: '低', none: '无' };
@@ -558,7 +558,7 @@ function renderDrawerRefsOut() {
   box.innerHTML = html;
   $('refs-out-head').addEventListener('click', function () {
     refsOutCollapsed = !refsOutCollapsed;
-    localStorage.setItem('easyreview-refsout-collapsed', refsOutCollapsed ? 'yes' : 'no');
+    localStorage.setItem('easyreview-refs-out-collapsed', refsOutCollapsed ? 'yes' : 'no');
     renderDrawerRefsOut();
   });
   bindRefJumps(box);

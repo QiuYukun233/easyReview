@@ -57,7 +57,7 @@ describe('renderPage', () => {
   it('refsOut: 抽屉第二折叠区与折叠持久化键都在', () => {
     const html = renderPage();
     expect(html).toContain('id="drawer-refs-out"');
-    expect(html).toContain('easyreview-refsout-collapsed');
+    expect(html).toContain('easyreview-refs-out-collapsed');
     expect(html).not.toContain('src=');             // 仍自包含
   });
 
