@@ -36,7 +36,7 @@
 
 ## 5. UI 呈现(page.ts)
 
-- **抽屉**:新增独立第二折叠区 `#drawer-refs-out`,紧跟 `#drawer-refs` 之后;交互完全镜像(默认折叠、localStorage 键 `easyreview-refsout-collapsed`)——不动已验收的 refsIn 区。
+- **抽屉**:新增独立第二折叠区 `#drawer-refs-out`,紧跟 `#drawer-refs` 之后;交互完全镜像(默认折叠、localStorage 键 `easyreview-refs-out-collapsed`——连字符惯例,质量评审修正)——不动已验收的 refsIn 区。
 - **面板卡片**:「被谁依赖」段之后加「它依赖谁(N)」段;N=10 标「前 10」不谎报总数。
 - 列表复用:现有 `refsHtml` 泛化为接受 `{ id, names }[]` 的通用列表函数(refsIn 传 from、refsOut 传 to);出边 to 恒为块,全部可点跳转(data-ref 机制沿用)。
 - 空态措辞(出边语义与入边不同):「未检出(名字级静态扫描;只统计仓内块之间的引用)」。
