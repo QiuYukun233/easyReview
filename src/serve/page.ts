@@ -506,10 +506,10 @@ function refsHtml(id) { // 非空列表 → <ul>;来源是块的可点跳转(dat
     var src = state.chunks[r.from]
       ? '<span class="nb ref-jump" data-ref="' + esc(r.from) + '" title="' + esc(r.from) + '">' + esc(base) + '</span>'
       : '<span class="muted" title="' + esc(r.from) + '">' + esc(base) + '</span>';
-    var ev = r.names.length
+    var evid = r.names.length
       ? ' <span class="muted">(' + esc(r.names.slice(0, 3).join(', ')) + (r.names.length > 3 ? '…' : '') + ')</span>'
       : '';
-    html += '<li>' + src + ev + '</li>';
+    html += '<li>' + src + evid + '</li>';
   }
   return html + '</ul>';
 }
