@@ -376,9 +376,10 @@ function renderFlows() {
     var setupCount = 0;
     for (var m = 0; m < f.steps.length; m++) if (f.steps[m].phase === 'setup') setupCount++;
     if (setupCount) {
-      html += '<div class="flow-setup-head">' + (flowSetupCollapsed ? '▸ ' : '▾ ') + '引导与测试数据准备(第 1-' + setupCount + ' 步)</div>';
+      html += '<div class="flow-setup-head">' + (flowSetupCollapsed ? '▸ ' : '▾ ') + '引导与测试数据准备(' + (setupCount > 1 ? '第 1-' + setupCount + ' 步' : '第 1 步') + ')</div>';
     }
     for (var j = 0; j < f.steps.length; j++) {
+      if (setupCount && j === setupCount) html += '<div class="muted">── 请求叙事开始(第 ' + (setupCount + 1) + ' 步)──</div>';
       var s = f.steps[j];
       if (s.phase === 'setup' && flowSetupCollapsed) continue;
       var c = state.chunks[s.chunkId];

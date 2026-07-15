@@ -93,6 +93,7 @@ describe('renderPage', () => {
     expect(html).toContain('flow-setup-head');
     expect(html).toContain('easyreview-flow-setup-collapsed');
     expect(html).toContain('引导与测试数据准备');
+    expect(html).toContain('请求叙事开始');
   });
 
   it('flow phase: 图例含相释义', () => {
