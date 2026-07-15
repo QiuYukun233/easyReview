@@ -65,6 +65,7 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
   }
 
   const pathIds = path.steps.map((s) => s.chunkId);
+  const flowList = flowsFile?.flows ?? [];
   return {
     generatedAt: new Date().toISOString(),
     progress: {
@@ -78,7 +79,7 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
     nextId: pathIds.find((id) => !understood.has(id)) ?? null,
     hasRefs: g.refsIn !== undefined,
     hasRefsOut: g.refsOut !== undefined,
-    flows: (flowsFile?.flows ?? []).map((f) => ({ id: f.id, name: f.name, spec: f.source.spec, steps: f.steps })),
-    hasFlows: (flowsFile?.flows ?? []).length > 0,
+    flows: flowList.map((f) => ({ id: f.id, name: f.name, spec: f.source.spec, steps: f.steps })),
+    hasFlows: flowList.length > 0,
   };
 }

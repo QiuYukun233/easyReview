@@ -122,6 +122,7 @@ describe('buildViewerState flows(纵向切割,spec §7)', () => {
     const s = buildViewerState(makeViewerTree(), makeViewerLabels(), { version: 1, understood: [] });
     expect(s.hasFlows).toBe(false);
     expect(s.flows).toEqual([]);
+    expect(buildViewerState(makeViewerTree(), makeViewerLabels(), { version: 1, understood: [] }, null).hasFlows).toBe(false);
   });
 
   it('空 flows 文件 → hasFlows=false(Tab 不该出现)', () => {
