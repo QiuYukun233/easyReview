@@ -186,3 +186,18 @@ export interface InterpretCache {
 export interface Interpreter {
   interpret(input: InterpretInput): Promise<ChunkInterpretation | null>;
 }
+
+/** 纵向切割:业务流程(spec:2026-07-15-flow-trace-pilot-design.md)。独立落盘 easyreview.flows.json,不进 tree.json。 */
+export interface FlowStep {
+  chunkId: NodeId;   // 文件级步骤;可能不是块(如 app/views ERB),前端降级纯文本
+  methods: string[]; // 该步命中的方法名 top-N,频次降序
+  hits: number;      // 原始调用序列中的命中次数(回访计数)
+}
+export interface Flow {
+  id: string;
+  name: string;      // 打样期由 CLI --name 人工给
+  source: { kind: 'rspec-trace'; spec: string; tracedAt: string }; // kind 即多来源预留接口
+  steps: FlowStep[];
+  rawTrace: { file: string; method: string; line: number }[]; // 方法级原始序列,将来下钻用;不出前端
+}
+export interface FlowsFile { version: 1; flows: Flow[] }
