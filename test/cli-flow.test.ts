@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runFlowTrace } from '../src/cli-flow.js';
+import { runFlowTrace, runFlowProbe } from '../src/cli-flow.js';
 import { sandboxFor } from '../src/verify/sandbox.js';
 import type { Exec } from '../src/verify/cargo.js';
 
@@ -151,5 +151,101 @@ describe('runFlowTrace(编排:沙箱注入→trace→折叠→落盘→清理)',
     const flows = JSON.parse(readFileSync(join(out, 'easyreview.flows.json'), 'utf8'));
     expect(flows.flows[0].id).toBe('flow-msg-L7');
     expect(flows.flows[0].source.spec).toBe('spec/msg_spec.rb:7');
+  });
+});
+
+/** 最小 rspec --format json 输出(形状对齐 test/rspec-parse.test.ts 的夹具)。 */
+function rspecOut(status: 'passed' | 'failed'): string {
+  return JSON.stringify({
+    version: '3.13.0',
+    examples: [{ id: 'spec/m_spec.rb[1:1]', description: 'c', full_description: 'X c',
+      status, file_path: './spec/m_spec.rb', line_number: 25 }],
+    summary: { duration: 1, example_count: 1, failure_count: status === 'failed' ? 1 : 0, errors_outside_of_examples_count: 0 },
+    summary_line: '1 example',
+  });
+}
+
+/** 造带流程数据的仓:app 文件(含方法)+ runner 配置 + outDir 落一条单例流程。 */
+function makeProbeRepo(): { repo: string; out: string } {
+  const repo = mkdtempSync(join(tmpdir(), 'er-probe-'));
+  const out = mkdtempSync(join(tmpdir(), 'er-probe-out-'));
+  writeFileSync(join(repo, 'easyreview.runner.json'), JSON.stringify({
+    version: 1, ruby: { cmd: ['fake-rspec', '{specFiles}'] },
+  }));
+  mkdirSync(join(repo, 'app', 'models'), { recursive: true });
+  writeFileSync(join(repo, 'app', 'models', 'm.rb'), [
+    'class M',
+    '  def save_it',
+    '    persist(1)',
+    '  end',
+    'end',
+  ].join('\n'));
+  mkdirSync(join(repo, 'spec'), { recursive: true });
+  writeFileSync(join(repo, 'spec', 'm_spec.rb'), 'it works');
+  writeFileSync(join(out, 'easyreview.flows.json'), JSON.stringify({
+    version: 1,
+    flows: [{
+      id: 'flow-m-L25', name: '单例流程',
+      source: { kind: 'rspec-trace', spec: 'spec/m_spec.rb:25', tracedAt: '2026-07-16T00:00:00Z' },
+      steps: [{ chunkId: 'app/models/m.rb', methods: ['save_it'], hits: 2, phase: 'request' }],
+      rawTrace: [{ file: '/app/app/models/m.rb', method: 'save_it', line: 2 }],
+    }, {
+      id: 'flow-full', name: '全谱流程',
+      source: { kind: 'rspec-trace', spec: 'spec/m_spec.rb', tracedAt: '2026-07-16T00:00:00Z' },
+      steps: [{ chunkId: 'app/models/m.rb', methods: ['save_it'], hits: 2, phase: 'request' }],
+      rawTrace: [],
+    }],
+  }));
+  return { repo, out };
+}
+
+describe('runFlowProbe(编排:校验→沙箱→斩→单例跑→判定→报告)', () => {
+  it('红预测命中:报告落盘含 ✅,突变经 withMutation 已还原(沙箱文件原样)', async () => {
+    const { repo, out } = makeProbeRepo();
+    let mutatedSeen = '';
+    const exec: Exec = async (_c, _a, cwd) => {
+      mutatedSeen = readFileSync(join(cwd, 'app', 'models', 'm.rb'), 'utf8');
+      return rspecOut('failed');
+    };
+    await runFlowProbe({ repo, outDir: out, flowId: 'flow-m-L25', step: 1, predict: 'red', exec });
+    expect(mutatedSeen).toContain('# persist(1)');           // 跑时确实斩了(方法体内那行被注释)
+    const md = readFileSync(join(out, 'easyreview.flowprobe.md'), 'utf8');
+    expect(md).toContain('✅ 预测命中');
+    expect(md).toContain('save_it');
+    const sb = sandboxFor(repo);
+    expect(readFileSync(join(sb.srcDir, 'app', 'models', 'm.rb'), 'utf8')).toContain('    persist(1)'); // 还原
+  });
+
+  it('绿结果+预测 red:报告 ❌ 且含绿的两种解释', async () => {
+    const { repo, out } = makeProbeRepo();
+    const exec: Exec = async () => rspecOut('passed');
+    await runFlowProbe({ repo, outDir: out, flowId: 'flow-m-L25', step: 1, predict: 'red', exec });
+    const md = readFileSync(join(out, 'easyreview.flowprobe.md'), 'utf8');
+    expect(md).toContain('❌ 预测未命中');
+    expect(md).toContain('防御性');
+  });
+
+  it('全谱流程(spec 无行号)友好拒绝', async () => {
+    const { repo, out } = makeProbeRepo();
+    await expect(runFlowProbe({ repo, outDir: out, flowId: 'flow-full', step: 1, predict: 'red' }))
+      .rejects.toThrow('全谱');
+  });
+
+  it('flowId 不存在/step 越界/predict 非法:各自友好拒绝', async () => {
+    const { repo, out } = makeProbeRepo();
+    await expect(runFlowProbe({ repo, outDir: out, flowId: 'flow-nope', step: 1, predict: 'red' }))
+      .rejects.toThrow('找不到流程');
+    await expect(runFlowProbe({ repo, outDir: out, flowId: 'flow-m-L25', step: 9, predict: 'red' }))
+      .rejects.toThrow('--step 越界');
+    await expect(runFlowProbe({ repo, outDir: out, flowId: 'flow-m-L25', step: 1, predict: 'boom' }))
+      .rejects.toThrow('--predict');
+  });
+
+  it('探针不改 flows.json(一次性考试,报告即产物)', async () => {
+    const { repo, out } = makeProbeRepo();
+    const before = readFileSync(join(out, 'easyreview.flows.json'), 'utf8');
+    const exec: Exec = async () => rspecOut('failed');
+    await runFlowProbe({ repo, outDir: out, flowId: 'flow-m-L25', step: 1, predict: 'red', exec });
+    expect(readFileSync(join(out, 'easyreview.flows.json'), 'utf8')).toBe(before);
   });
 });

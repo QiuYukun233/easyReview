@@ -5,6 +5,11 @@ import { sandboxFor, syncSandbox } from './verify/sandbox.js';
 import { realExec, type Exec } from './verify/cargo.js';
 import { TRACER_RB, foldTrace, type RawCall } from './flow/trace.js';
 import { loadFlows, saveFlows, upsertFlow } from './flow/flows.js';
+import { withMutation } from './verify/mutate.js';
+import { parseRspecJson } from './verify/rspec-parse.js';
+import { pickSiteInMethods, type ProbeSite } from './flow/probe-site.js';
+import { judgeProbe, renderProbeMd, type ProbePrediction } from './flow/probe.js';
+import type { MutationOp } from './types.js';
 
 const TRACER_NAME = 'easyreview_tracer.rb';
 const TRACE_OUT = 'easyreview-trace.json';
@@ -77,4 +82,71 @@ export async function runFlowTrace(o: FlowTraceOpts): Promise<void> {
       if (existsSync(p)) unlinkSync(p);
     }
   }
+}
+
+export interface FlowProbeOpts {
+  repo: string; outDir: string; flowId: string; step: number; predict: string;
+  exec?: Exec;
+}
+
+/** 流程级突变探针:斩链上第 N 步(优先流程命中方法体内),真跑单 example,比对预测(spec:2026-07-16-flow-probe-design.md)。 */
+export async function runFlowProbe(o: FlowProbeOpts): Promise<void> {
+  if (o.predict !== 'red' && o.predict !== 'green') {
+    throw new Error('--predict 只接受 red|green(断/不断)');
+  }
+  const predicted = o.predict as ProbePrediction;
+  const flowsFile = loadFlows(o.outDir);
+  const flow = flowsFile?.flows.find((f) => f.id === o.flowId);
+  if (!flow) {
+    const have = (flowsFile?.flows ?? []).map((f) => f.id).join(', ') || '(空)';
+    throw new Error(`找不到流程「${o.flowId}」——现有:${have}`);
+  }
+  if (parseSpecRef(flow.source.spec).line === null) {
+    throw new Error('该流程是全谱 trace(spec 无行号)——红绿会被其它 example 污染;先用 flow trace <spec>:<行号> 采单例流程');
+  }
+  if (!Number.isInteger(o.step) || o.step < 1 || o.step > flow.steps.length) {
+    throw new Error(`--step 越界:${o.step}(该流程共 ${flow.steps.length} 步)`);
+  }
+  const target = flow.steps[o.step - 1];
+  const config = loadRubyRunnerConfig(o.repo);
+  const sb = sandboxFor(o.repo);
+  console.error('⏳ 同步沙箱…');
+  syncSandbox(o.repo, sb.srcDir);
+  const absFile = join(sb.srcDir, target.chunkId);
+  if (!existsSync(absFile)) throw new Error(`沙箱里没有 ${target.chunkId}`);
+  const source = readFileSync(absFile, 'utf8');
+
+  // 主路径:该步 methods(频次序)∩ rawTrace 定义行 → 方法体内落刀
+  const defLines: { method: string; line: number }[] = [];
+  for (const m of target.methods) {
+    const hit = flow.rawTrace.find((c) => c.file === '/app/' + target.chunkId && c.method === m);
+    if (hit) defLines.push({ method: m, line: hit.line });
+  }
+  let site: ProbeSite | null = await pickSiteInMethods(source, defLines);
+  let fallback = false;
+  if (!site) {
+    // 回退:文件级既有 chooseMutation(报告显式标注)
+    const { chooseMutation } = await import('./verify/mutate.js');
+    const op = await chooseMutation(
+      { id: target.chunkId, name: target.chunkId, file: target.chunkId, crate: '', leafIds: [] }, [], source);
+    if (!op) throw new Error(`${target.chunkId} 找不到可注释的探针位点——换一步(与 verify 的 uncovered 先例一致)`);
+    site = { line: op.line, original: op.original, scope: 'file-fallback' };
+    fallback = true;
+  }
+  const indent = site.original.slice(0, site.original.length - site.original.trimStart().length);
+  const op: MutationOp = {
+    file: target.chunkId, line: site.line, original: site.original,
+    mutated: indent + '# ' + site.original.trim(),
+    description: `flow probe:斩「${flow.name}」第 ${o.step} 步`,
+  };
+  console.error(`⏳ 斩第 ${o.step} 步(${target.chunkId}:${site.line}${site.method ? ' · ' + site.method : ''})并重跑单 example…`);
+  const [cmd, ...args] = expandCmd(config.cmd, [flow.source.spec]);
+  const run = await withMutation(absFile, op, async () =>
+    parseRspecJson(await (o.exec ?? realExec)(cmd, args, sb.srcDir)));
+  const verdict = judgeProbe(run, predicted);
+  writeFileSync(join(o.outDir, 'easyreview.flowprobe.md'),
+    renderProbeMd({ flow, step: o.step, target, site, fallback, verdict }));
+  console.log(verdict.hit
+    ? '✓ 预测命中——报告已写入 easyreview.flowprobe.md'
+    : '✗ 预测未命中——报告已写入 easyreview.flowprobe.md');
 }
