@@ -1,4 +1,4 @@
-import type { GradedTree, LabelCache } from '../src/types.js';
+import type { GradedTree, LabelCache, ChunkRefIn } from '../src/types.js';
 
 /** 2 章 3 块 2 叶的小树：a.rs(有函数/有标签/filler..none)、b.rs(核心 high:high)、c.rs(另一章、无叶子)。 */
 export function makeViewerTree(): GradedTree {
@@ -35,4 +35,15 @@ export function makeViewerLabels(): LabelCache {
       'crates/foo/src/a.rs': { responsibility: '演示职责', whyNow: 'LLM说现在学', contentHash: 'h' },
     },
   };
+}
+
+/** makeViewerTree 之上加 refsIn:a.rs 被 b.rs(块)与 util.rs(范围内非块文件)引用;b/c 无键。 */
+export function makeViewerTreeWithRefs(): GradedTree {
+  const refsIn: Record<string, ChunkRefIn[]> = {
+    'crates/foo/src/a.rs': [
+      { from: 'crates/foo/src/b.rs', weight: 1, names: ['a', 'helper'] },
+      { from: 'crates/foo/src/util.rs', weight: 0.5, names: ['a'] },
+    ],
+  };
+  return { ...makeViewerTree(), refsIn };
 }

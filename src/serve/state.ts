@@ -10,6 +10,7 @@ export interface ViewerChunk {
   whyNow: string;                 // LLM 的,或 journey-md 静态回退
   functions: { name: string; startLine: number }[];
   neighbors: NodeId[];
+  refsIn: { from: NodeId; names: string[] }[]; // 入边(落盘已按权重降序);weight 不出——内部量纲对读者无意义
 }
 
 export interface ViewerState {
@@ -19,6 +20,7 @@ export interface ViewerState {
   chunks: Record<NodeId, ViewerChunk>;
   path: NodeId[];
   nextId: NodeId | null;
+  hasRefs: boolean; // tree.refsIn 是否存在;false=老产物两处不渲染(区别于"有数据但此块无入边")
 }
 
 const RISK_ROWS: RiskBucket[] = ['high', 'med', 'low', 'none'];
@@ -53,6 +55,7 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
       whyNow: label ? label.whyNow : whyNow(grade),
       functions: g.leaves.filter((l) => l.file === c.id).map((l) => ({ name: l.name, startLine: l.startLine })),
       neighbors: neighborsByChunk[c.id] ?? [],
+      refsIn: (g.refsIn?.[c.id] ?? []).map((r) => ({ from: r.from, names: r.names })),
     };
   }
 
@@ -68,5 +71,6 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
     chunks,
     path: pathIds,
     nextId: pathIds.find((id) => !understood.has(id)) ?? null,
+    hasRefs: g.refsIn !== undefined,
   };
 }

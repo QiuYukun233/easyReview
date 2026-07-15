@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildViewerState } from '../src/serve/state.js';
-import { makeViewerTree, makeViewerLabels } from './viewer-fixture.js';
+import { makeViewerTree, makeViewerLabels, makeViewerTreeWithRefs } from './viewer-fixture.js';
 
 const A = 'crates/foo/src/a.rs';
 const B = 'crates/foo/src/b.rs';
@@ -52,5 +52,30 @@ describe('buildViewerState', () => {
     const s = buildViewerState(makeViewerTree(), EMPTY_LABELS, { version: 1, understood: [] });
     expect(s.chunks[A].responsibility).toBeNull();
     expect(s.chunks[A].whyNow.length).toBeGreaterThan(0);
+  });
+});
+
+describe('buildViewerState refsIn(被谁依赖)', () => {
+  it('refsIn 保序进 ViewerChunk,weight 不出,hasRefs=true', () => {
+    const s = buildViewerState(makeViewerTreeWithRefs(), makeViewerLabels(), { version: 1, understood: [] });
+    expect(s.hasRefs).toBe(true);
+    expect(s.chunks[A].refsIn).toEqual([
+      { from: B, names: ['a', 'helper'] },            // toEqual 深比较,weight 混进来会挂
+      { from: 'crates/foo/src/util.rs', names: ['a'] },
+    ]);
+  });
+
+  it('tree 无 refsIn(老产物)→ hasRefs=false 且各块 refsIn=[]', () => {
+    const s = buildViewerState(makeViewerTree(), makeViewerLabels(), { version: 1, understood: [] });
+    expect(s.hasRefs).toBe(false);
+    expect(s.chunks[A].refsIn).toEqual([]);
+    expect(s.chunks[B].refsIn).toEqual([]);
+  });
+
+  it('有 refsIn 但某块无键 → 该块 [] 而 hasRefs 仍 true', () => {
+    const s = buildViewerState(makeViewerTreeWithRefs(), makeViewerLabels(), { version: 1, understood: [] });
+    expect(s.hasRefs).toBe(true);
+    expect(s.chunks[B].refsIn).toEqual([]);
+    expect(s.chunks[C].refsIn).toEqual([]);
   });
 });

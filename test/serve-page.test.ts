@@ -39,4 +39,18 @@ describe('renderPage', () => {
     expect(html).toContain('解读生成中');
     expect(html).not.toContain('src=');
   });
+
+  it('refsIn: 抽屉容器与折叠持久化键都在', () => {
+    const html = renderPage();
+    expect(html).toContain('id="drawer-refs"');
+    expect(html).toContain('easyreview-refs-collapsed');
+    expect(html).not.toContain('src=');             // 仍自包含
+  });
+
+  it('refsIn: 共用渲染函数与被谁依赖/空态文案都在', () => {
+    const html = renderPage();
+    expect(html).toContain('refsHtml');
+    expect(html).toContain('被谁依赖');
+    expect(html).toContain('未检出');
+  });
 });
