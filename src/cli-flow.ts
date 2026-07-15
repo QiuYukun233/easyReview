@@ -9,6 +9,23 @@ import { loadFlows, saveFlows, upsertFlow } from './flow/flows.js';
 const TRACER_NAME = 'easyreview_tracer.rb';
 const TRACE_OUT = 'easyreview-trace.json';
 
+export interface SpecRef { file: string; line: number | null }
+
+/** 解析 spec 引用:尾部 :<正整数> 定位单 example(spec:2026-07-16-flow-example-window-design.md)。
+ *  多 example spec 下每个 example 重建工厂数据会污染双相判定——单 example 窗口恢复其语义。 */
+export function parseSpecRef(ref: string): SpecRef {
+  const i = ref.lastIndexOf(':');
+  if (i > 0 && ref.slice(0, i).endsWith('_spec.rb')) {
+    const tail = ref.slice(i + 1);
+    const digits = tail.length > 0 && [...tail].every((ch) => ch >= '0' && ch <= '9');
+    if (!digits || Number(tail) < 1) {
+      throw new Error(`行号非法:「${tail}」——用法 spec/xxx_spec.rb:55(正整数行号定位单 example)`);
+    }
+    return { file: ref.slice(0, i), line: Number(tail) };
+  }
+  return { file: ref, line: null };
+}
+
 export interface FlowTraceOpts {
   repo: string; outDir: string; specFile: string; name: string;
   exec?: Exec; // 测试注入;缺省 realExec(非零退出不抛——trace 不受 spec 红绿影响)
@@ -16,18 +33,20 @@ export interface FlowTraceOpts {
 
 /** 编排:沙箱同步→tracer 写进沙箱(compose 挂沙箱,真实仓零污染)→rspec -r 注入→读回→折叠→落盘→finally 清理。 */
 export async function runFlowTrace(o: FlowTraceOpts): Promise<void> {
-  if (!o.specFile.endsWith('_spec.rb')) {
+  const ref = parseSpecRef(o.specFile);
+  if (!ref.file.endsWith('_spec.rb')) {
     throw new Error('flow trace 打样期只支持 Ruby rspec——传 *_spec.rb 文件(spec §1,web 栈先行)');
   }
+  const specArg = ref.line ? ref.file + ':' + ref.line : ref.file;
   const config = loadRubyRunnerConfig(o.repo);
   const sb = sandboxFor(o.repo);
   console.error('⏳ 同步沙箱…');
   syncSandbox(o.repo, sb.srcDir);
-  if (!existsSync(join(sb.srcDir, o.specFile))) throw new Error(`仓里没有 ${o.specFile}`);
+  if (!existsSync(join(sb.srcDir, ref.file))) throw new Error(`仓里没有 ${ref.file}`);
   writeFileSync(join(sb.srcDir, TRACER_NAME), TRACER_RB);
   try {
     console.error('⏳ 跑 rspec + TracePoint(docker 冷启动可能较慢)…');
-    const [cmd, ...args] = expandCmd(config.cmd, ['-r./' + TRACER_NAME, o.specFile]);
+    const [cmd, ...args] = expandCmd(config.cmd, ['-r./' + TRACER_NAME, specArg]);
     await (o.exec ?? realExec)(cmd, args, sb.srcDir);
     const tracePath = join(sb.srcDir, TRACE_OUT);
     if (!existsSync(tracePath)) {
@@ -43,9 +62,9 @@ export async function runFlowTrace(o: FlowTraceOpts): Promise<void> {
     if (!steps.length) throw new Error('trace 没有触达 app/ 代码——换一条 request/controller spec');
     if (raw.truncated) console.error('⚠ trace 达上限被截断——首现序步链仍可用,hits 偏低');
     const flow = {
-      id: 'flow-' + o.specFile.split('/').pop()!.replace('_spec.rb', ''),
+      id: 'flow-' + ref.file.split('/').pop()!.replace('_spec.rb', '') + (ref.line ? '-L' + ref.line : ''),
       name: o.name,
-      source: { kind: 'rspec-trace' as const, spec: o.specFile, tracedAt: new Date().toISOString() },
+      source: { kind: 'rspec-trace' as const, spec: specArg, tracedAt: new Date().toISOString() },
       steps,
       rawTrace: raw.calls,
     };

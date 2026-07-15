@@ -90,4 +90,56 @@ describe('runFlowTrace(编排:沙箱注入→trace→折叠→落盘→清理)',
     await expect(runFlowTrace({ repo, outDir: repo, specFile: 'spec/msg_spec.rb', name: 'x', exec: halfWrite }))
       .rejects.toThrow('trace 输出损坏');
   });
+
+  it('file:line 定位:id 带 -L、rspec 参数含行号、存在性检查用文件部分', async () => {
+    const repo = makeRepo();
+    const out = mkdtempSync(join(tmpdir(), 'er-out-'));
+    let seenArgs: string[] = [];
+    const exec: Exec = async (_c, args, cwd) => {
+      seenArgs = args;
+      writeFileSync(join(cwd, 'easyreview-trace.json'), JSON.stringify({ truncated: false, calls: [
+        { file: '/app/app/a.rb', method: 'f', line: 1 },
+      ] }));
+      return 'ok';
+    };
+    await runFlowTrace({ repo, outDir: out, specFile: 'spec/msg_spec.rb:55', name: '单例', exec });
+    expect(seenArgs).toContain('spec/msg_spec.rb:55');
+    const flows = JSON.parse(readFileSync(join(out, 'easyreview.flows.json'), 'utf8'));
+    expect(flows.flows[0].id).toBe('flow-msg-L55');
+    expect(flows.flows[0].source.spec).toBe('spec/msg_spec.rb:55');
+  });
+
+  it('行号非法(:abc)友好拒绝', async () => {
+    const repo = makeRepo();
+    await expect(runFlowTrace({ repo, outDir: repo, specFile: 'spec/msg_spec.rb:abc', name: 'x' }))
+      .rejects.toThrow('行号非法');
+  });
+
+  it('行号非法(:0)友好拒绝', async () => {
+    const repo = makeRepo();
+    await expect(runFlowTrace({ repo, outDir: repo, specFile: 'spec/msg_spec.rb:0', name: 'x' }))
+      .rejects.toThrow('行号非法');
+  });
+
+  it('纯文件与 file:line 共存:id 分别为 flow-msg 与 flow-msg-L55', async () => {
+    const repo = makeRepo();
+    const out = mkdtempSync(join(tmpdir(), 'er-out-'));
+    const trace = { truncated: false, calls: [{ file: '/app/app/a.rb', method: 'f', line: 1 }] };
+    await runFlowTrace({ repo, outDir: out, specFile: 'spec/msg_spec.rb', name: '全谱', exec: fakeExec(trace) });
+    await runFlowTrace({ repo, outDir: out, specFile: 'spec/msg_spec.rb:55', name: '单例', exec: fakeExec(trace) });
+    const flows = JSON.parse(readFileSync(join(out, 'easyreview.flows.json'), 'utf8'));
+    expect(flows.flows.map((f: { id: string }) => f.id)).toEqual(['flow-msg', 'flow-msg-L55']);
+  });
+
+  it('同 file:line 重跑覆盖自己,不动同 spec 其它行号', async () => {
+    const repo = makeRepo();
+    const out = mkdtempSync(join(tmpdir(), 'er-out-'));
+    const trace = { truncated: false, calls: [{ file: '/app/app/a.rb', method: 'f', line: 1 }] };
+    await runFlowTrace({ repo, outDir: out, specFile: 'spec/msg_spec.rb:55', name: 'A', exec: fakeExec(trace) });
+    await runFlowTrace({ repo, outDir: out, specFile: 'spec/msg_spec.rb:120', name: 'B', exec: fakeExec(trace) });
+    await runFlowTrace({ repo, outDir: out, specFile: 'spec/msg_spec.rb:55', name: 'A2', exec: fakeExec(trace) });
+    const flows = JSON.parse(readFileSync(join(out, 'easyreview.flows.json'), 'utf8'));
+    expect(flows.flows.map((f: { id: string; name: string }) => [f.id, f.name]))
+      .toEqual([['flow-msg-L55', 'A2'], ['flow-msg-L120', 'B']]);
+  });
 });
