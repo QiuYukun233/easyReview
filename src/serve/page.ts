@@ -66,6 +66,7 @@ main { display: flex; gap: 16px; padding: 16px 20px; align-items: flex-start; }
 .flow-step .no { color: var(--muted); flex: none; width: 34px; text-align: right; }
 .flow-step .hits { color: var(--muted); font-size: 12px; }
 .flow-step code { font: 12px ui-monospace, monospace; color: var(--muted); }
+.flow-setup-head { cursor: pointer; user-select: none; color: var(--accent); font-weight: 600; padding: 3px 0; }
 #tree { font-family: ui-monospace, monospace; font-size: 13px; }
 .tree-dir { cursor: pointer; padding: 2px 0; user-select: none; }
 .tree-dir .cnt { color: var(--muted); font-size: 12px; }
@@ -164,13 +165,14 @@ var interpOn = localStorage.getItem('easyreview-interpret') !== 'off'; // 默认
 var interpCollapsed = localStorage.getItem('easyreview-interpret-collapsed') === 'yes';
 var refsCollapsed = localStorage.getItem('easyreview-refs-collapsed') !== 'no'; // 默认折叠(不挤源码空间)
 var refsOutCollapsed = localStorage.getItem('easyreview-refs-out-collapsed') !== 'no'; // 默认折叠
+var flowSetupCollapsed = localStorage.getItem('easyreview-flow-setup-collapsed') !== 'no'; // 默认折叠
 var interp = {}; // chunkId → { st: 'loading'|'ok'|'nokey'|'err', data?, msg? }(本页生命周期缓存)
 
 var RISK_CN = { high: '高', med: '中', low: '低', none: '无' };
 var CONTRIB_CN = { filler: '填充', low: '低', med: '中', high: '高' };
 var GRID_LEGEND = '■ 灰=未学 · <span style="color:var(--lit)">■</span> 绿=已理解 · 绿框=已验证 · <span style="color:var(--next)">■</span> 黄=下一步 · 行=风险(高→无) 列=贡献度(填充→高) · 点行头折叠该行';
 var TREE_LEGEND = '● 风险色点(红高/橙中/黄低/灰无) · <span class="tick">✓</span>=已理解 <span class="tick">✓✓</span>=已验证 · 点目录折叠,点文件看源码';
-var FLOWS_LEGEND = '纵向切片:一条真实业务流程的执行链(rspec 真跑采集,非静态猜测)· 步骤=文件首现序 · ×N=命中次数 · 点步骤看源码';
+var FLOWS_LEGEND = '纵向切片:一条真实业务流程的执行链(rspec 真跑采集,非静态猜测)· setup=引导+测试数据(默认折叠) request=请求叙事 · ×N=命中次数 · 点步骤看源码';
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;'); }
@@ -371,8 +373,14 @@ function renderFlows() {
     html += '<div class="flow-card"><h3>' + esc(f.name) + '</h3>';
     html += '<div class="muted">来源:rspec 真跑采集(' + esc(f.spec) + ')</div>';
     if (!f.steps.length) html += '<div class="muted">(此流程没有步骤——flows.json 可能被手工改动,重跑 flow trace 重采)</div>';
+    var setupCount = 0;
+    for (var m = 0; m < f.steps.length; m++) if (f.steps[m].phase === 'setup') setupCount++;
+    if (setupCount) {
+      html += '<div class="flow-setup-head">' + (flowSetupCollapsed ? '▸ ' : '▾ ') + '引导与测试数据准备(第 1-' + setupCount + ' 步)</div>';
+    }
     for (var j = 0; j < f.steps.length; j++) {
       var s = f.steps[j];
+      if (s.phase === 'setup' && flowSetupCollapsed) continue;
       var c = state.chunks[s.chunkId];
       var label = c
         ? '<span class="nb flow-jump" data-ref="' + esc(s.chunkId) + '" title="' + esc(s.chunkId) + '">' + esc(c.name) + '</span>'
@@ -384,6 +392,14 @@ function renderFlows() {
     html += '</div>';
   }
   $('flows').innerHTML = html;
+  var heads = $('flows').querySelectorAll('.flow-setup-head');
+  for (var h = 0; h < heads.length; h++) {
+    heads[h].addEventListener('click', function () {
+      flowSetupCollapsed = !flowSetupCollapsed;
+      localStorage.setItem('easyreview-flow-setup-collapsed', flowSetupCollapsed ? 'yes' : 'no');
+      renderFlows();
+    });
+  }
   var els = $('flows').querySelectorAll('.flow-jump');
   for (var k = 0; k < els.length; k++) {
     els[k].addEventListener('click', function (ev) {

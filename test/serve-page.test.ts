@@ -87,4 +87,17 @@ describe('renderPage', () => {
     // 守卫必须存在且带 !important,否则抽屉自加载起常驻、盖住贡献度「高」列与右侧面板。
     expect(html).toContain('[hidden] { display: none !important; }');
   });
+
+  it('flow phase: setup 折叠头/持久化键/文案都在', () => {
+    const html = renderPage();
+    expect(html).toContain('flow-setup-head');
+    expect(html).toContain('easyreview-flow-setup-collapsed');
+    expect(html).toContain('引导与测试数据准备');
+  });
+
+  it('flow phase: 图例含相释义', () => {
+    const html = renderPage();
+    expect(html).toContain('setup=引导+测试数据');
+    expect(html).toContain('request=请求叙事');
+  });
 });
