@@ -19,10 +19,14 @@ EASYREVIEW_TP = TracePoint.new(:call) do |t|
 end
 EASYREVIEW_TP.enable
 at_exit do
-  File.write('/app/easyreview-trace.json', JSON.generate({
-    'truncated' => EASYREVIEW_CALLS.length >= ${TRACE_LIMIT},
-    'calls' => EASYREVIEW_CALLS,
-  }))
+  begin
+    File.write('/app/easyreview-trace.json', JSON.generate({
+      'truncated' => EASYREVIEW_CALLS.length >= ${TRACE_LIMIT},
+      'calls' => EASYREVIEW_CALLS,
+    }))
+  rescue => e
+    warn "easyreview tracer: trace 落盘失败 #{e.class} #{e.message}"
+  end
 end
 `;
 

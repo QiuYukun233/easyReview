@@ -58,6 +58,7 @@ describe('TRACER_RB(容器内 Ruby tracer)', () => {
     expect(TRACER_RB).toContain('at_exit');
     expect(TRACER_RB).toContain('easyreview-trace.json');
     expect(TRACER_RB).toContain(String(TRACE_LIMIT));
+    expect(TRACER_RB).toContain('rescue');
     expect(TRACER_RB).not.toContain('`');
     expect(TRACER_RB).not.toContain('${');
   });

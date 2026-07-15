@@ -23,6 +23,12 @@ describe('flows 文件读写(独立 easyreview.flows.json,spec §5)', () => {
     expect(loadFlows(dir)).toBeNull();
   });
 
+  it('合法 JSON 但 flows 非数组 → null', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'er-'));
+    writeFileSync(join(dir, 'easyreview.flows.json'), JSON.stringify({ version: 1, flows: 'x' }));
+    expect(loadFlows(dir)).toBeNull();
+  });
+
   it('save→load 往返一致', () => {
     const dir = mkdtempSync(join(tmpdir(), 'er-'));
     saveFlows(dir, { version: 1, flows: [flow('flow-a', 'A 流程')] });

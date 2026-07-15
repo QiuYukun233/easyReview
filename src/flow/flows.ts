@@ -11,7 +11,10 @@ export function loadFlows(outDir: string): FlowsFile | null {
   try {
     const parsed = JSON.parse(readFileSync(p, 'utf8')) as FlowsFile;
     return Array.isArray(parsed.flows) ? parsed : null;
-  } catch { return null; }
+  } catch {
+    console.warn('⚠ easyreview.flows.json 解析失败,忽略(流程 Tab 将不显示)');
+    return null;
+  }
 }
 
 export function saveFlows(outDir: string, flows: FlowsFile): void {
