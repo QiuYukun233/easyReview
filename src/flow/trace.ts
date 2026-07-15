@@ -1,9 +1,10 @@
-import type { FlowStep } from '../types.js';
+import type { FlowStep, FlowPhase } from '../types.js';
 
 export interface RawCall { file: string; method: string; line: number }
 
 export const TRACE_LIMIT = 50000;
 const METHODS_TOP_N = 8;
+const BOUNDARY_PREFIX = 'app/controllers/'; // 分界锚点;将来多锚点(jobs/mailer 入口)扩成数组
 
 /** 容器内 tracer:TracePoint 采 app/ 调用序列,at_exit 落盘 JSON。
  *  经 rspec -r./easyreview_tracer.rb 注入(写进沙箱,compose 挂沙箱→真实仓零污染)。
@@ -41,7 +42,7 @@ export function foldTrace(calls: RawCall[], containerPrefix = '/app/'): FlowStep
     const rel = c.file.slice(containerPrefix.length);
     return rel.startsWith('app/') ? rel : '';
   });
-  const boundary = rels.findIndex((r) => r.startsWith('app/controllers/'));
+  const boundary = rels.findIndex((r) => r.startsWith(BOUNDARY_PREFIX));
 
   const byFile = new Map<string, { hits: number; methodCounts: Map<string, number>; firstAfterBoundary: number }>();
   const order: string[] = [];
@@ -55,7 +56,7 @@ export function foldTrace(calls: RawCall[], containerPrefix = '/app/'): FlowStep
     if (boundary >= 0 && i >= boundary && e.firstAfterBoundary < 0) e.firstAfterBoundary = i;
   }
 
-  const toStep = (f: string, phase: 'setup' | 'request'): FlowStep => {
+  const toStep = (f: string, phase: FlowPhase): FlowStep => {
     const e = byFile.get(f)!;
     const methods = [...e.methodCounts.entries()]
       .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))

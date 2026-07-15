@@ -121,4 +121,13 @@ describe('foldTrace 分相(spec:2026-07-16-flow-phase-design.md)', () => {
     ]);
     expect(steps.map((s) => s.phase)).toEqual(['setup', 'setup', 'request', 'request', 'request']);
   });
+
+  it('序列第一条即 controller(boundary=0)→ 全 request、无 setup 步', () => {
+    const steps = foldTrace([
+      call('/app/app/controllers/c.rb', 'act'),
+      call('/app/app/models/m.rb', 'save'),
+    ]);
+    expect(steps.map((s) => s.phase)).toEqual(['request', 'request']);
+    expect(steps.map((s) => s.chunkId)).toEqual(['app/controllers/c.rb', 'app/models/m.rb']);
+  });
 });
