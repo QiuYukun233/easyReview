@@ -51,3 +51,7 @@
 - setup 段内部不再细分(引导 vs 工厂)——单层折叠够用。
 - per-flow 独立折叠态持久化(多流程时代再议)。
 - 非 controller 锚点的分界启发(jobs 入口、mailer 入口等)——等真仓出现该形态的流程再议。
+
+## 8. 已知局限(质量评审记档,2026-07-16)
+
+**eager_load 可能提前分界点(中低概率,静默降级)**:tracer 的 `-r` 注入先于 Rails boot,TracePoint 全程激活;若目标仓在测试环境开 `config.eager_load` 且某 controller 文件在 boot 期发生**定义在该文件内的方法调用**(TracePoint 的 path 取方法定义处,宏调用指向 gem 定义不算),分界点会落进 boot 段,setup 段坍缩、分相失真——不崩溃、不产生非法数据,但本功能的动机被静默瓦解。chatwoot 配方(RAILS_ENV=test、未设 CI)大概率不触发。若将来真仓踩中:考虑「boundary 距序列起点过近时告警」的轻量启发。
