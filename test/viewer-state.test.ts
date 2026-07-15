@@ -130,4 +130,15 @@ describe('buildViewerState flows(纵向切割,spec §7)', () => {
       { version: 1, flows: [] });
     expect(s.hasFlows).toBe(false);
   });
+
+  it('steps 带 phase 原样透传到前端', () => {
+    const withPhase = { version: 1 as const, flows: [{
+      id: 'flow-p', name: 'P',
+      source: { kind: 'rspec-trace' as const, spec: 'spec/p_spec.rb', tracedAt: '2026-07-16T00:00:00Z' },
+      steps: [{ chunkId: A, methods: ['f'], hits: 1, phase: 'request' as const }],
+      rawTrace: [],
+    }] };
+    const s = buildViewerState(makeViewerTree(), makeViewerLabels(), { version: 1, understood: [] }, withPhase);
+    expect(s.flows[0].steps[0].phase).toBe('request');
+  });
 });
