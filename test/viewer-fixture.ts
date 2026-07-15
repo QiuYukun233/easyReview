@@ -1,4 +1,4 @@
-import type { GradedTree, LabelCache, ChunkRefIn } from '../src/types.js';
+import type { GradedTree, LabelCache, ChunkRefIn, ChunkRefOut } from '../src/types.js';
 
 /** 2 章 3 块 2 叶的小树：a.rs(有函数/有标签/filler..none)、b.rs(核心 high:high)、c.rs(另一章、无叶子)。 */
 export function makeViewerTree(): GradedTree {
@@ -46,4 +46,12 @@ export function makeViewerTreeWithRefs(): GradedTree {
     ],
   };
   return { ...makeViewerTree(), refsIn };
+}
+
+/** makeViewerTreeWithRefs 之上再加 refsOut:b.rs 依赖 a.rs。 */
+export function makeViewerTreeWithRefsOut(): GradedTree {
+  const refsOut: Record<string, ChunkRefOut[]> = {
+    'crates/foo/src/b.rs': [{ to: 'crates/foo/src/a.rs', weight: 1, names: ['a'] }],
+  };
+  return { ...makeViewerTreeWithRefs(), refsOut };
 }

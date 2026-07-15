@@ -11,6 +11,7 @@ export interface ViewerChunk {
   functions: { name: string; startLine: number }[];
   neighbors: NodeId[];
   refsIn: { from: NodeId; names: string[] }[]; // 入边(落盘已按权重降序);weight 不出——内部量纲对读者无意义
+  refsOut: { to: NodeId; names: string[] }[]; // 出边(落盘已按权重降序);weight 不出,同 refsIn
 }
 
 export interface ViewerState {
@@ -21,6 +22,7 @@ export interface ViewerState {
   path: NodeId[];
   nextId: NodeId | null;
   hasRefs: boolean; // tree.refsIn 是否存在;false=老产物两处不渲染(区别于"有数据但此块无入边")
+  hasRefsOut: boolean; // tree.refsOut 是否存在;仅 refsIn 的中间期产物此旗标 false
 }
 
 const RISK_ROWS: RiskBucket[] = ['high', 'med', 'low', 'none'];
@@ -56,6 +58,7 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
       functions: g.leaves.filter((l) => l.file === c.id).map((l) => ({ name: l.name, startLine: l.startLine })),
       neighbors: neighborsByChunk[c.id] ?? [],
       refsIn: (g.refsIn?.[c.id] ?? []).map((r) => ({ from: r.from, names: r.names })),
+      refsOut: (g.refsOut?.[c.id] ?? []).map((r) => ({ to: r.to, names: r.names })),
     };
   }
 
@@ -72,5 +75,6 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
     path: pathIds,
     nextId: pathIds.find((id) => !understood.has(id)) ?? null,
     hasRefs: g.refsIn !== undefined,
+    hasRefsOut: g.refsOut !== undefined,
   };
 }

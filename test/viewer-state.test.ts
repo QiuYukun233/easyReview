@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildViewerState } from '../src/serve/state.js';
-import { makeViewerTree, makeViewerLabels, makeViewerTreeWithRefs } from './viewer-fixture.js';
+import { makeViewerTree, makeViewerLabels, makeViewerTreeWithRefs, makeViewerTreeWithRefsOut } from './viewer-fixture.js';
 
 const A = 'crates/foo/src/a.rs';
 const B = 'crates/foo/src/b.rs';
@@ -77,5 +77,27 @@ describe('buildViewerState refsIn(被谁依赖)', () => {
     expect(s.hasRefs).toBe(true);
     expect(s.chunks[B].refsIn).toEqual([]);
     expect(s.chunks[C].refsIn).toEqual([]);
+  });
+});
+
+describe('buildViewerState refsOut(它依赖谁)', () => {
+  it('refsOut 进 ViewerChunk 去 weight,hasRefsOut=true', () => {
+    const s = buildViewerState(makeViewerTreeWithRefsOut(), makeViewerLabels(), { version: 1, understood: [] });
+    expect(s.hasRefsOut).toBe(true);
+    expect(s.chunks[B].refsOut).toEqual([{ to: A, names: ['a'] }]);
+    expect(s.chunks[A].refsOut).toEqual([]);
+  });
+
+  it('仅 refsIn 的中间期产物 → hasRefsOut=false 且各块 refsOut=[]', () => {
+    const s = buildViewerState(makeViewerTreeWithRefs(), makeViewerLabels(), { version: 1, understood: [] });
+    expect(s.hasRefs).toBe(true);
+    expect(s.hasRefsOut).toBe(false);
+    expect(s.chunks[B].refsOut).toEqual([]);
+  });
+
+  it('全无的老产物 → 双旗标 false', () => {
+    const s = buildViewerState(makeViewerTree(), makeViewerLabels(), { version: 1, understood: [] });
+    expect(s.hasRefs).toBe(false);
+    expect(s.hasRefsOut).toBe(false);
   });
 });
