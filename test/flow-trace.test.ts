@@ -63,3 +63,62 @@ describe('TRACER_RB(容器内 Ruby tracer)', () => {
     expect(TRACER_RB).not.toContain('${');
   });
 });
+
+describe('foldTrace 分相(spec:2026-07-16-flow-phase-design.md)', () => {
+  it('controller 分界:自身与其后命中者归 request(分界含自身)', () => {
+    const steps = foldTrace([
+      call('/app/app/models/factory_only.rb', 'build'),
+      call('/app/app/controllers/msg_controller.rb', 'create'),
+      call('/app/app/models/message.rb', 'save'),
+    ]);
+    expect(steps.map((s) => [s.chunkId, s.phase])).toEqual([
+      ['app/models/factory_only.rb', 'setup'],
+      ['app/controllers/msg_controller.rb', 'request'],
+      ['app/models/message.rb', 'request'],
+    ]);
+  });
+
+  it('跨相文件(分界前首现+分界后命中)归 request,hits 仍全链统计(conversation.rb 场景)', () => {
+    const steps = foldTrace([
+      call('/app/app/models/conversation.rb', 'create'),
+      call('/app/app/controllers/c.rb', 'act'),
+      call('/app/app/models/conversation.rb', 'save'),
+    ]);
+    const conv = steps.find((s) => s.chunkId === 'app/models/conversation.rb')!;
+    expect(conv.phase).toBe('request');
+    expect(conv.hits).toBe(2);
+  });
+
+  it('工厂专属(分界后零命中)归 setup', () => {
+    const steps = foldTrace([
+      call('/app/app/models/factory_only.rb', 'build'),
+      call('/app/app/models/factory_only.rb', 'build'),
+      call('/app/app/controllers/c.rb', 'act'),
+    ]);
+    const fo = steps.find((s) => s.chunkId === 'app/models/factory_only.rb')!;
+    expect(fo.phase).toBe('setup');
+    expect(fo.hits).toBe(2);
+  });
+
+  it('无 controller → 全部 request 且无 setup 步(model spec 场景,行为同现状)', () => {
+    const steps = foldTrace([call('/app/app/models/a.rb', 'f'), call('/app/app/models/b.rb', 'g')]);
+    expect(steps.map((s) => s.chunkId)).toEqual(['app/models/a.rb', 'app/models/b.rb']);
+    expect(steps.every((s) => s.phase === 'request')).toBe(true);
+  });
+
+  it('步序:setup 段首现序在前(非字典序),request 段按分界后首次命中序', () => {
+    const steps = foldTrace([
+      call('/app/app/models/z_setup.rb', 'f'),
+      call('/app/app/models/a_setup.rb', 'f'),
+      call('/app/app/models/late.rb', 'f'),
+      call('/app/app/controllers/c.rb', 'act'),
+      call('/app/app/models/late.rb', 'f'),
+      call('/app/app/models/early.rb', 'f'),
+    ]);
+    expect(steps.map((s) => s.chunkId)).toEqual([
+      'app/models/z_setup.rb', 'app/models/a_setup.rb',
+      'app/controllers/c.rb', 'app/models/late.rb', 'app/models/early.rb',
+    ]);
+    expect(steps.map((s) => s.phase)).toEqual(['setup', 'setup', 'request', 'request', 'request']);
+  });
+});

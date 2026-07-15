@@ -192,6 +192,7 @@ export interface FlowStep {
   chunkId: NodeId;   // 文件级步骤;可能不是块(如 app/views ERB),前端降级纯文本
   methods: string[]; // 该步命中的方法名 top-N,频次降序
   hits: number;      // 原始调用序列中的命中次数(回访计数)
+  phase?: 'setup' | 'request'; // 分相(spec:2026-07-16-flow-phase-design.md);旧数据无此字段=不分段
 }
 export interface Flow {
   id: string;

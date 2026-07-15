@@ -30,25 +30,43 @@ at_exit do
 end
 `;
 
-/** 调用序列 → 文件级链:去容器前缀、只保 app/、步序=首现、hits=命中次数(相邻合并被此规则覆盖)。 */
+/** 调用序列 → 文件级链 + 分相(spec:2026-07-16-flow-phase-design.md):
+ *  去容器前缀、只保 app/、hits=全链命中次数。
+ *  分界点 = 首次进 app/controllers/ 的调用(含自身);分界起仍被命中 → request,否则 setup。
+ *  steps 重排:setup 段(首现序)在前、request 段(按分界后首次命中序,叙事从 controller 开场)在后;
+ *  无分界点 → 全部 request、不分段(model spec 等,行为同分相前)。 */
 export function foldTrace(calls: RawCall[], containerPrefix = '/app/'): FlowStep[] {
-  const order: string[] = [];
-  const byFile = new Map<string, { hits: number; methodCounts: Map<string, number> }>();
-  for (const c of calls) {
-    if (!c.file.startsWith(containerPrefix)) continue;
+  const rels: string[] = calls.map((c) => {
+    if (!c.file.startsWith(containerPrefix)) return '';
     const rel = c.file.slice(containerPrefix.length);
-    if (!rel.startsWith('app/')) continue;
+    return rel.startsWith('app/') ? rel : '';
+  });
+  const boundary = rels.findIndex((r) => r.startsWith('app/controllers/'));
+
+  const byFile = new Map<string, { hits: number; methodCounts: Map<string, number>; firstAfterBoundary: number }>();
+  const order: string[] = [];
+  for (let i = 0; i < calls.length; i++) {
+    const rel = rels[i];
+    if (!rel) continue;
     let e = byFile.get(rel);
-    if (!e) { e = { hits: 0, methodCounts: new Map() }; byFile.set(rel, e); order.push(rel); }
+    if (!e) { e = { hits: 0, methodCounts: new Map(), firstAfterBoundary: -1 }; byFile.set(rel, e); order.push(rel); }
     e.hits++;
-    e.methodCounts.set(c.method, (e.methodCounts.get(c.method) ?? 0) + 1);
+    e.methodCounts.set(calls[i].method, (e.methodCounts.get(calls[i].method) ?? 0) + 1);
+    if (boundary >= 0 && i >= boundary && e.firstAfterBoundary < 0) e.firstAfterBoundary = i;
   }
-  return order.map((f) => {
+
+  const toStep = (f: string, phase: 'setup' | 'request'): FlowStep => {
     const e = byFile.get(f)!;
     const methods = [...e.methodCounts.entries()]
       .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
       .slice(0, METHODS_TOP_N)
       .map(([m]) => m);
-    return { chunkId: f, methods, hits: e.hits };
-  });
+    return { chunkId: f, methods, hits: e.hits, phase };
+  };
+
+  if (boundary < 0) return order.map((f) => toStep(f, 'request'));
+  const setup = order.filter((f) => byFile.get(f)!.firstAfterBoundary < 0);
+  const request = order.filter((f) => byFile.get(f)!.firstAfterBoundary >= 0)
+    .sort((a, b) => byFile.get(a)!.firstAfterBoundary - byFile.get(b)!.firstAfterBoundary);
+  return [...setup.map((f) => toStep(f, 'setup')), ...request.map((f) => toStep(f, 'request'))];
 }
