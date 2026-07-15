@@ -403,7 +403,7 @@ export async function runFlowTrace(o: FlowTraceOpts): Promise<void> {
     await (o.exec ?? realExec)(cmd, args, sb.srcDir);
     const tracePath = join(sb.srcDir, TRACE_OUT);
     if (!existsSync(tracePath)) {
-      throw new Error('trace 输出不存在——rspec 可能在加载期就崩了;先手跑该 spec 确认环境(配方:docs/recipes/chatwoot-rspec.md)');
+      throw new Error('trace 输出不存在——rspec 可能在加载期崩了或进程被超时杀死(at_exit 没跑到);先手跑该 spec 确认环境(配方:docs/recipes/chatwoot-rspec.md)');
     }
     const raw = JSON.parse(readFileSync(tracePath, 'utf8')) as { truncated: boolean; calls: RawCall[] };
     const steps = foldTrace(raw.calls);
