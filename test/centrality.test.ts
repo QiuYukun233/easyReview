@@ -1,95 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { nameFanInCentrality, genericDfCutoff } from '../src/grade/centrality.js';
-import type { Leaf } from '../src/types.js';
+import { referenceGraphCentrality, genericDfCutoff, REFS_IN_TOP_K } from '../src/grade/centrality.js';
+import type { Leaf, Chunk } from '../src/types.js';
 
 const leaf = (file: string, name: string): Leaf => ({
   id: `${file}::${name}::1`, kind: 'fn', name, file, startLine: 1, endLine: 1, loc: 1,
 });
-
-describe('nameFanInCentrality', () => {
-  it('counts cross-file identifier occurrences of a chunk\'s function names', () => {
-    const leaves = [leaf('util.rs', 'helper'), leaf('main.rs', 'run')];
-    const sources: Record<string, string> = {
-      'util.rs': 'pub fn helper() {}',
-      'main.rs': 'fn run() { helper(); helper(); }',
-    };
-    const cen = nameFanInCentrality(leaves, sources);
-    expect(cen['util.rs']).toBe(1);
-    expect(cen['main.rs'] ?? 0).toBe(0);
-  });
+// 与 buildTree 一致:name = 无扩展名 basename
+const chunk = (file: string): Chunk => ({
+  id: file, name: file.split('/').pop()!.replace(/\.[^.]+$/, ''), file, crate: 'app', leafIds: [],
 });
-
-// —— 以下为 2026-07-13 分词化新增:与旧正则实现的等价性由 naiveReference 锁定 ——
-
-/** 旧实现原样搬来做参照(每名字建正则×每文件扫)。 */
-function naiveReference(leaves: Leaf[], sources: Record<string, string>): Record<string, number> {
-  const filesByLeafFile = new Map<string, Set<string>>();
-  for (const l of leaves) {
-    if (!filesByLeafFile.has(l.file)) filesByLeafFile.set(l.file, new Set());
-    filesByLeafFile.get(l.file)!.add(l.name);
-  }
-  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const raw: Record<string, number> = {};
-  for (const [file, names] of filesByLeafFile) {
-    let count = 0;
-    for (const name of names) {
-      const re = new RegExp(`\\b${esc(name)}\\b`, 'g');
-      for (const [otherFile, src] of Object.entries(sources)) {
-        if (otherFile === file) continue;
-        count += (src.match(re) ?? []).length;
-      }
-    }
-    raw[file] = count;
-  }
-  const max = Math.max(0, ...Object.values(raw));
-  if (max === 0) return {};
-  const out: Record<string, number> = {};
-  for (const [f, n] of Object.entries(raw)) out[f] = n / max;
-  return out;
-}
-
-describe('nameFanInCentrality tokenized rewrite', () => {
-  it('matches the old regex implementation on word-boundary edge cases', () => {
-    const leaves = [
-      leaf('a.js', 'foo'), leaf('a.js', 'bar'),
-      leaf('b.js', 'foo_bar'),
-      leaf('c.js', 'baz'),
-    ];
-    const sources: Record<string, string> = {
-      'a.js': 'foo_bar(); foo(); bar();',
-      'b.js': 'foo(); foo.bar(); "foo"; foo_bar_x(); x_foo_bar();',
-      'c.js': 'foofoo(); foo(); { bar: 1 } foo_bar();',
-    };
-    expect(nameFanInCentrality(leaves, sources)).toEqual(naiveReference(leaves, sources));
-  });
-
-  it('non-word-char names (ruby valid?/save!) fall back to regex, same as old', () => {
-    const leaves = [leaf('m.rb', 'valid?'), leaf('n.rb', 'plain')];
-    const sources: Record<string, string> = {
-      'm.rb': 'def valid?; end',
-      'n.rb': 'valid?x; valid? ; plain(); if valid?y then plain end',
-    };
-    expect(nameFanInCentrality(leaves, sources)).toEqual(naiveReference(leaves, sources));
-  });
-
-  it('all-zero stays empty record', () => {
-    const leaves = [leaf('a.js', 'nowhere')];
-    const sources = { 'a.js': 'nowhere()', 'b.js': 'unrelated()' };
-    expect(nameFanInCentrality(leaves, sources)).toEqual({});
-  });
-
-  it('names with $ or unicode chars stay equivalent via fallback (WORD must mirror \\w)', () => {
-    const leaves = [leaf('u.js', 'get$ref'), leaf('v.js', 'café')];
-    const sources: Record<string, string> = {
-      'u.js': 'caféx(); get$ref();',
-      'v.js': 'x$get$ref; get$ref(); x = café + caféx;',
-    };
-    expect(nameFanInCentrality(leaves, sources)).toEqual(naiveReference(leaves, sources));
-  });
-});
-
-// —— 以下为 2026-07-14 泛用名截断新增(spec:2026-07-14-centrality-generic-cutoff-design.md)——
-// 注意:上面的 naiveReference 对拍夹具都 <20 文件,截断永不触发,契约原样成立。
 
 describe('genericDfCutoff', () => {
   it('小仓库走 20 文件下限(umwelt N=68 时 5% 阈值=4 会误杀真领域名)', () => {
@@ -106,78 +25,133 @@ describe('genericDfCutoff', () => {
   });
 });
 
-describe('nameFanInCentrality 泛用名截断', () => {
-  it('df == cutoff 计入、df == cutoff+1 截断(下限档,22 个合成文件)', () => {
-    const leaves = [leaf('a.js', 'cut21'), leaf('b.js', 'keep20')];
-    const sources: Record<string, string> = { 'a.js': 'cut21();', 'b.js': 'keep20();' };
-    // cut21 出现在 a.js + o1..o20 → df=21 > cutoff(20) → 截断
-    // keep20 出现在 b.js + o1..o19 → df=20 == cutoff → 计入,他文件出现 19 次
-    for (let i = 1; i <= 20; i++) sources[`o${i}.js`] = 'cut21();';
-    for (let i = 1; i <= 19; i++) sources[`o${i}.js`] += ' keep20();';
-    const cen = nameFanInCentrality(leaves, sources);
-    expect(cen['b.js']).toBe(1); // keep20 的 19 次是全场唯一非零 → max → 1
-    expect(cen['a.js'] ?? 0).toBe(0); // cut21 被截断 → raw 0
+describe('referenceGraphCentrality(引用图加权入度,spec:2026-07-14-centrality-refgraph-design.md)', () => {
+  it('叶子名成边:引用方指向定义块,中心度与 refsIn 都记账', () => {
+    const chunks = [chunk('util.js'), chunk('main.js')];
+    const leaves = [leaf('util.js', 'helperFn')];
+    const sources = { 'util.js': 'export function helperFn() {}', 'main.js': 'helperFn();' };
+    const { centrality, refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(centrality['util.js']).toBe(1);
+    expect(centrality['main.js']).toBe(0);
+    expect(refsIn['util.js']).toEqual([{ from: 'main.js', weight: 1, names: ['helperFn'] }]);
+    expect(refsIn['main.js'] ?? []).toEqual([]);
   });
 
-  it('撞关键字的叶子名(import)不再霸榜——chatwoot 灾难合成用例', () => {
-    const leaves = [leaf('actions.js', 'import'), leaf('api.js', 'fetchThing')];
-    const sources: Record<string, string> = {
-      'actions.js': 'export const doImport = () => {}; // import action',
-      'api.js': 'export function fetchThing() {}',
+  it('fin 计数:同一引用文件出现 5 次,权重仍 1', () => {
+    const chunks = [chunk('lib.js'), chunk('spam.js')];
+    const leaves = [leaf('lib.js', 'thing')];
+    const sources = { 'lib.js': 'thing', 'spam.js': 'thing thing thing thing thing' };
+    const { refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['lib.js']).toEqual([{ from: 'spam.js', weight: 1, names: ['thing'] }]);
+  });
+
+  it('身份名成边:import ApiClient 场景,叶子名不可见时块仍有入度', () => {
+    const chunks = [chunk('ApiClient.js'), chunk('users.js')];
+    const leaves = [leaf('ApiClient.js', 'get')]; // 只在定义文件出现,产不了叶子边
+    const sources = {
+      'ApiClient.js': 'export default class ApiClient {}',
+      'users.js': "import ApiClient from './ApiClient';",
     };
-    // 每个消费者文件都有 import 语句;只有 c1..c5 真调 fetchThing
-    for (let i = 1; i <= 21; i++) {
-      sources[`c${i}.js`] = `import x from 'y';` + (i <= 5 ? ' fetchThing();' : '');
-    }
-    // 23 文件,cutoff=20;import df=22(actions.js 注释 + c1..c21)→ 截断;fetchThing df=6 → 计 5 次
-    const cen = nameFanInCentrality(leaves, sources);
-    expect(cen['api.js']).toBe(1);
-    expect(cen['actions.js'] ?? 0).toBe(0);
+    const { centrality, refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['ApiClient.js']).toEqual([{ from: 'users.js', weight: 1, names: ['ApiClient'] }]);
+    expect(centrality['ApiClient.js']).toBe(1);
   });
 
-  it('非词名(valid?)走正则回退同样受截断', () => {
-    const leaves = [leaf('m.rb', 'valid?'), leaf('n.rb', 'compute_thing')];
-    // \bvalid\?\b 要求 ? 后紧跟词字符才有边界(新旧实现一致的既有怪癖),夹具统一用 valid?x 形式
-    const sources: Record<string, string> = { 'm.rb': 'valid?x = 1', 'n.rb': 'def compute_thing; end' };
-    for (let i = 1; i <= 20; i++) {
-      sources[`r${i}.rb`] = 'valid?x && go' + (i <= 3 ? '; compute_thing' : '');
-    }
-    // 22 文件,cutoff=20;valid? df=21(m.rb+r1..r20)→ 截断;compute_thing df=4 → 计 3 次
-    const cen = nameFanInCentrality(leaves, sources);
-    expect(cen['n.rb']).toBe(1);
-    expect(cen['m.rb'] ?? 0).toBe(0);
-  });
-
-  it('非词名 df == cutoff 恰好计入(回退路径边界)', () => {
-    const leaves = [leaf('m.rb', 'valid?'), leaf('n.rb', 'compute_thing')];
-    const sources: Record<string, string> = { 'm.rb': 'valid?x = 1', 'n.rb': 'def compute_thing; end' };
-    for (let i = 1; i <= 19; i++) sources[`r${i}.rb`] = 'valid?x && go';
-    sources['r20.rb'] = 'compute_thing';
-    sources['r21.rb'] = 'compute_thing';
-    // 23 文件,cutoff=20;valid? df=20(m.rb+r1..r19)== cutoff → 计入 19 次;compute_thing df=3 → 计 2 次
-    const cen = nameFanInCentrality(leaves, sources);
-    expect(cen['m.rb']).toBe(1);
-    expect(cen['n.rb']).toBeCloseTo(2 / 19);
-  });
-
-  it('同文件混合:超限名字归零、其余名字照常累计', () => {
-    const leaves = [leaf('mix.js', 'ubiquitous'), leaf('mix.js', 'special'), leaf('z.js', 'anchor')];
-    const sources: Record<string, string> = {
-      'mix.js': 'ubiquitous(); special(); anchor();',
-      'z.js': 'anchor(); special(); special();',
+  it('rb 驼峰身份名:url_helper.rb 被 UrlHelper 引用成边', () => {
+    const chunks = [chunk('app/helpers/url_helper.rb'), chunk('app/models/msg.rb')];
+    const leaves = [leaf('app/helpers/url_helper.rb', 'build_url')];
+    const sources = {
+      'app/helpers/url_helper.rb': 'module UrlHelper; def build_url; end; end',
+      'app/models/msg.rb': 'include UrlHelper',
     };
-    for (let i = 1; i <= 21; i++) sources[`u${i}.js`] = 'ubiquitous();';
-    // 23 文件,cutoff=20;ubiquitous df=22 → 截断;special df=2 → mix 计 2;anchor df=2 → z 计 1
-    const cen = nameFanInCentrality(leaves, sources);
-    expect(cen['mix.js']).toBe(1); // 2/2;若 ubiquitous 未被截,raw=2+21=23
-    expect(cen['z.js']).toBe(0.5); // 1/2;若 ubiquitous 未被截,z≈1/23≈0.043 —— 此断言使截断不可少
+    const { refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['app/helpers/url_helper.rb']).toEqual([
+      { from: 'app/models/msg.rb', weight: 1, names: ['UrlHelper'] },
+    ]);
   });
 
-  it('文件全部名字被截断且无其它信号 → 空表(沿用 max=0 行为)', () => {
-    const leaves = [leaf('a.js', 'everywhere')];
-    const sources: Record<string, string> = { 'a.js': 'everywhere();' };
-    for (let i = 1; i <= 21; i++) sources[`e${i}.js`] = 'everywhere();';
-    // 22 文件,cutoff=20;everywhere df=22 → 截断 → raw 全 0 → {}
-    expect(nameFanInCentrality(leaves, sources)).toEqual({});
+  it('非词 basename(foo-bar.js)不产身份名', () => {
+    const chunks = [chunk('foo-bar.js'), chunk('user.js')];
+    const leaves = [leaf('foo-bar.js', 'doThing')];
+    const sources = { 'foo-bar.js': 'export const doThing = () => {};', 'user.js': 'bar(); foo();' };
+    const { centrality, refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['foo-bar.js'] ?? []).toEqual([]);
+    expect(centrality).toEqual({}); // 无任何边 → 全零 → {}
+  });
+
+  it('df 截断作用于身份名:泛用文件名 index 不建边,具体叶子名照常', () => {
+    const chunks = [chunk('lib/index.js'), ...Array.from({ length: 21 }, (_, i) => chunk(`c${i + 1}.js`))];
+    const leaves = [leaf('lib/index.js', 'specialFn')];
+    const sources: Record<string, string> = { 'lib/index.js': 'export const specialFn = () => {}; // index' };
+    for (let i = 1; i <= 21; i++) sources[`c${i}.js`] = `import x from '../index';` + (i === 1 ? ' specialFn();' : '');
+    // 22 文件,cutoff=20;index df=22(lib/index.js 注释 + c1..c21)→ 截;specialFn df=2 → 成边
+    const { refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['lib/index.js']).toEqual([{ from: 'c1.js', weight: 1, names: ['specialFn'] }]);
+  });
+
+  it('多定义均分:同名两定义者各得 0.5', () => {
+    const chunks = [chunk('a.js'), chunk('b.js'), chunk('c.js')];
+    const leaves = [leaf('a.js', 'sharedFn'), leaf('b.js', 'sharedFn')];
+    const sources = { 'a.js': 'sharedFn', 'b.js': 'sharedFn', 'c.js': 'sharedFn();' };
+    const { centrality, refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['a.js']).toEqual([{ from: 'c.js', weight: 0.5, names: ['sharedFn'] }]);
+    expect(refsIn['b.js']).toEqual([{ from: 'c.js', weight: 0.5, names: ['sharedFn'] }]);
+    expect(centrality['a.js']).toBe(1); // 0.5 是全场最大 → 归一化 1
+    expect(centrality['c.js']).toBe(0);
+  });
+
+  it('自引不成边:定义文件里出现自己的名字不计', () => {
+    const chunks = [chunk('solo.js')];
+    const leaves = [leaf('solo.js', 'me')];
+    const sources = { 'solo.js': 'const me = () => me();' };
+    expect(referenceGraphCentrality(chunks, leaves, sources)).toEqual({ centrality: {}, refsIn: {} });
+  });
+
+  it('同一引用方多名字:权重累加、names 字典序', () => {
+    const chunks = [chunk('Util.js'), chunk('use.js')];
+    const leaves = [leaf('Util.js', 'zip'), leaf('Util.js', 'alpha')];
+    const sources = {
+      'Util.js': 'export const zip = 1, alpha = 2;',
+      'use.js': "import Util from './Util'; Util.zip(); Util.alpha();",
+    };
+    const { refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['Util.js']).toEqual([{ from: 'use.js', weight: 3, names: ['Util', 'alpha', 'zip'] }]);
+  });
+
+  it('归一化:入度除以全场最大,无边块为 0', () => {
+    const chunks = [chunk('pop.js'), chunk('mid.js'), chunk('u1.js'), chunk('u2.js')];
+    const leaves = [leaf('pop.js', 'popFn'), leaf('mid.js', 'midFn')];
+    const sources = {
+      'pop.js': 'popFn', 'mid.js': 'midFn',
+      'u1.js': 'popFn(); midFn();', 'u2.js': 'popFn();',
+    };
+    const { centrality } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(centrality['pop.js']).toBe(1);   // 入度 2
+    expect(centrality['mid.js']).toBe(0.5); // 入度 1
+    expect(centrality['u1.js']).toBe(0);
+  });
+
+  it('refsIn top-10:权重降序、平权 from 字典序、超出截断', () => {
+    const chunks = [chunk('core.js'), ...Array.from({ length: 11 }, (_, i) => chunk(`f${String(i + 1).padStart(2, '0')}.js`))];
+    const leaves = [leaf('core.js', 'coreFnA'), leaf('core.js', 'coreFnB')];
+    const sources: Record<string, string> = { 'core.js': 'coreFnA coreFnB' };
+    for (let i = 1; i <= 11; i++) sources[`f${String(i).padStart(2, '0')}.js`] = 'coreFnA' + (i === 11 ? '; coreFnB' : '');
+    const { refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    const list = refsIn['core.js'];
+    expect(REFS_IN_TOP_K).toBe(10);
+    expect(list).toHaveLength(REFS_IN_TOP_K);
+    expect(list[0]).toEqual({ from: 'f11.js', weight: 2, names: ['coreFnA', 'coreFnB'] }); // 权重最高在前
+    expect(list.slice(1).map((r) => r.from)).toEqual(
+      ['f01.js', 'f02.js', 'f03.js', 'f04.js', 'f05.js', 'f06.js', 'f07.js', 'f08.js', 'f09.js'],
+    ); // 平权按 from 字典序,f10.js 被 top-10 截掉
+  });
+
+  it('非词名(valid?)走正则回退成边(尾缀 ? 要求后跟词字符,夹具用 valid?x 形式)', () => {
+    const chunks = [chunk('m.rb'), chunk('n.rb')];
+    const leaves = [leaf('m.rb', 'valid?')];
+    const sources = { 'm.rb': 'def valid?; end', 'n.rb': 'x = valid?x' };
+    const { centrality, refsIn } = referenceGraphCentrality(chunks, leaves, sources);
+    expect(refsIn['m.rb']).toEqual([{ from: 'n.rb', weight: 1, names: ['valid?'] }]);
+    expect(centrality['m.rb']).toBe(1);
   });
 });

@@ -7,7 +7,7 @@ import { logNameOnly, listTrackedFiles } from './git.js';
 import { relativeChurn } from './grade/churn.js';
 import { changeCoupling } from './grade/coupling.js';
 import { ownershipConcentration } from './grade/ownership.js';
-import { nameFanInCentrality } from './grade/centrality.js';
+import { referenceGraphCentrality } from './grade/centrality.js';
 import { gradeTree } from './grade/grade.js';
 import { renderMapMarkdown } from './render/map-md.js';
 import type { Labeler } from './types.js';
@@ -45,11 +45,12 @@ export async function runMap(opts: MapOptions): Promise<void> {
     sources[f] = readFileSync(join(repo, f), 'utf8');
   }
 
-  const graded = gradeTree(tree, {
+  const ref = referenceGraphCentrality(tree.chunks, tree.leaves, sources);
+  const graded = gradeTree({ ...tree, refsIn: ref.refsIn }, {
     relChurn: relativeChurn(log),
     coupling: changeCoupling(log),
     ownership: ownershipConcentration(log),
-    centrality: nameFanInCentrality(tree.leaves, sources),
+    centrality: ref.centrality,
   });
 
   writeFileSync(join(outDir, 'easyreview.tree.json'), JSON.stringify(graded, null, 2));

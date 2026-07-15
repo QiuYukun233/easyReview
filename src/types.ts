@@ -26,11 +26,19 @@ export interface Chapter {
   chunkIds: NodeId[];
 }
 
+/** 引用图入边(中心度 v2 顺产物;spec:2026-07-14-centrality-refgraph-design.md) */
+export interface ChunkRefIn {
+  from: NodeId;      // 引用方块 id
+  weight: number;    // fin·多定义均分后的累计权重
+  names: string[];   // 命中的名字,字典序
+}
+
 export interface Tree {
   repo: string;
   chapters: Chapter[];
   chunks: Chunk[];
   leaves: Leaf[];
+  refsIn?: Record<NodeId, ChunkRefIn[]>;  // 每块入边 top-10,权重降序;平权 from 字典序
 }
 
 export type RiskBucket = 'none' | 'low' | 'med' | 'high';
