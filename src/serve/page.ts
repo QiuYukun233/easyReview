@@ -229,11 +229,11 @@ function render() {
 }
 
 function renderTabs() {
+  if (view === 'flows' && !state.hasFlows) { view = 'grid'; localStorage.setItem('easyreview-view', view); } // 回退必须先于 className 读 view
   $('tab-grid').className = view === 'grid' ? 'active' : '';
   $('tab-tree').className = view === 'tree' ? 'active' : '';
   $('tab-flows').className = view === 'flows' ? 'active' : '';
   $('tab-flows').hidden = !state.hasFlows;
-  if (view === 'flows' && !state.hasFlows) { view = 'grid'; localStorage.setItem('easyreview-view', view); }
   $('grid').hidden = view !== 'grid';
   $('tree').hidden = view !== 'tree';
   $('flows').hidden = view !== 'flows';
@@ -369,6 +369,7 @@ function renderFlows() {
     var f = state.flows[i];
     html += '<div class="flow-card"><h3>' + esc(f.name) + '</h3>';
     html += '<div class="muted">来源:rspec 真跑采集(' + esc(f.spec) + ')</div>';
+    if (!f.steps.length) html += '<div class="muted">(此流程没有步骤——flows.json 可能被手工改动,重跑 flow trace 重采)</div>';
     for (var j = 0; j < f.steps.length; j++) {
       var s = f.steps[j];
       var c = state.chunks[s.chunkId];
