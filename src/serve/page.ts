@@ -86,9 +86,6 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
 #drawer-head button { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
 #drawer-head button.done-btn { border-color: var(--lit); color: var(--lit); }
 #drawer-head button.done-btn:disabled { border-color: var(--border); color: var(--muted); }
-#drawer-refs { padding: 6px 16px; border-bottom: 1px solid var(--border); font-size: 13px; max-height: 30vh; overflow: auto; }
-#drawer-refs .refs-head { cursor: pointer; user-select: none; color: var(--accent); font-weight: 600; }
-#drawer-refs ul { margin: 6px 0; padding-left: 20px; }
 #drawer-fns { padding: 6px 16px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px; max-height: 40px; overflow: hidden; }
 #drawer-fns.open { max-height: 180px; overflow: auto; }
 .fn-chip { border: 1px solid var(--border); border-radius: 12px; padding: 1px 8px; font: 12px ui-monospace, monospace; cursor: pointer; color: var(--accent); background: none; }
@@ -97,6 +94,9 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
 #interp .interp-body p { margin: 6px 0; }
 #interp .fn-gist { margin: 2px 0; }
 #interp .fn-gist code { color: var(--accent); cursor: pointer; }
+#drawer-refs { padding: 6px 16px; border-bottom: 1px solid var(--border); font-size: 13px; max-height: 30vh; overflow: auto; }
+#drawer-refs .refs-head { cursor: pointer; user-select: none; color: var(--accent); font-weight: 600; }
+#drawer-refs ul { margin: 6px 0; padding-left: 20px; }
 #drawer-src { flex: 1; overflow: auto; font: 12px/1.55 ui-monospace, monospace; padding: 8px 0; }
 .src-line { display: flex; }
 .src-line .ln { flex: none; width: 52px; text-align: right; padding-right: 12px; color: var(--muted); user-select: none; }
