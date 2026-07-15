@@ -59,7 +59,7 @@
 - serve:读 `easyreview.flows.json` 进 `ViewerState.flows` + `hasFlows` 旗标;文件不存在(全部既有产物)→ Tab 不渲染,零回归。
 - 走读步进模式(当前步高亮/上一步下一步)留二期。
 
-## 8. 测试计划(预计 +10~12 条)
+## 8. 测试计划(计划定稿 +19 条,300→319;初估 10~12,cli-flow 编排的集成测试与 tracer 常量断言是增量)
 
 - 链折叠纯函数:相邻合并、首现序、回访 hits、app 外过滤、映射块 id(fixture 序列驱动,不进 Docker)。
 - flows.json 读写 schema 与损坏容错(读不出 → 视同不存在)。
