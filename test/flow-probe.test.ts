@@ -48,4 +48,14 @@ describe('renderProbeMd(报告,spec §6)', () => {
       verdict: { actual: 'green', predicted: 'green', hit: true } });
     expect(md2).toContain('防御性');
   });
+
+  it('回退×红:警示存在但不再说绿色不可信,标注红色结论仍有效', () => {
+    const fb = { line: 2, original: '  x = 1', scope: 'file-fallback' as const };
+    const md = renderProbeMd({ flow, step: 1, target, site: fb, fallback: true,
+      verdict: { actual: 'red', predicted: 'red', hit: true } });
+    expect(md).toContain('刀落在流程未必经过的位置');
+    expect(md).toContain('红色结论仍有效');
+    expect(md).not.toContain('不可作为理解凭据');
+    expect(md).toContain('✅ 预测命中');
+  });
 });
