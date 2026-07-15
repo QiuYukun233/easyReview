@@ -94,9 +94,9 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
 #interp .interp-body p { margin: 6px 0; }
 #interp .fn-gist { margin: 2px 0; }
 #interp .fn-gist code { color: var(--accent); cursor: pointer; }
-#drawer-refs { padding: 6px 16px; border-bottom: 1px solid var(--border); font-size: 13px; max-height: 30vh; overflow: auto; }
-#drawer-refs .refs-head { cursor: pointer; user-select: none; color: var(--accent); font-weight: 600; }
-#drawer-refs ul { margin: 6px 0; padding-left: 20px; }
+#drawer-refs, #drawer-refs-out { padding: 6px 16px; border-bottom: 1px solid var(--border); font-size: 13px; max-height: 30vh; overflow: auto; }
+#drawer-refs .refs-head, #drawer-refs-out .refs-head { cursor: pointer; user-select: none; color: var(--accent); font-weight: 600; }
+#drawer-refs ul, #drawer-refs-out ul { margin: 6px 0; padding-left: 20px; }
 #drawer-src { flex: 1; overflow: auto; font: 12px/1.55 ui-monospace, monospace; padding: 8px 0; }
 .src-line { display: flex; }
 .src-line .ln { flex: none; width: 52px; text-align: right; padding-right: 12px; color: var(--muted); user-select: none; }
@@ -134,6 +134,7 @@ button.done-btn:disabled { border-color: var(--border); color: var(--muted); cur
   <div id="drawer-head"></div>
   <div id="drawer-fns"></div>
   <div id="drawer-refs" hidden></div>
+  <div id="drawer-refs-out" hidden></div>
   <div id="interp" hidden></div>
   <div id="drawer-src"></div>
 </aside>
@@ -152,6 +153,7 @@ var srcCache = {}; // chunkId → /api/source body(本页生命周期内缓存)
 var interpOn = localStorage.getItem('easyreview-interpret') !== 'off'; // 默认开
 var interpCollapsed = localStorage.getItem('easyreview-interpret-collapsed') === 'yes';
 var refsCollapsed = localStorage.getItem('easyreview-refs-collapsed') !== 'no'; // 默认折叠(不挤源码空间)
+var refsOutCollapsed = localStorage.getItem('easyreview-refsout-collapsed') !== 'no'; // 默认折叠
 var interp = {}; // chunkId → { st: 'loading'|'ok'|'nokey'|'err', data?, msg? }(本页生命周期缓存)
 
 var RISK_CN = { high: '高', med: '中', low: '低', none: '无' };
@@ -213,7 +215,7 @@ function render() {
   renderTabs();
   if (view === 'grid') renderGrid(); else renderTree();
   renderPanel();
-  if (drawerId) { renderDrawerHead(); renderDrawerFns(); renderDrawerRefs(); } // done 后按钮/✓ 即时更新
+  if (drawerId) { renderDrawerHead(); renderDrawerFns(); renderDrawerRefs(); renderDrawerRefsOut(); } // done 后按钮/✓ 即时更新
 }
 
 function renderTabs() {
@@ -356,6 +358,7 @@ function openDrawer(id) {
   renderDrawerHead();
   renderDrawerFns();
   renderDrawerRefs();
+  renderDrawerRefsOut();
   renderInterp();
   loadInterp(id);
   var cached = srcCache[id];
@@ -381,6 +384,7 @@ function closeDrawer() {
   $('drawer').classList.remove('full');
   $('drawer').hidden = true;
   $('drawer-refs').hidden = true;
+  $('drawer-refs-out').hidden = true;
   $('interp').hidden = true;
   $('backdrop').hidden = true;
 }
@@ -494,18 +498,24 @@ function renderInterp() {
   }
 }
 
-// ── 被谁依赖(refsIn,中心度 v2 落盘;hasRefs=false 的老产物两处都不渲染) ──
+// ── 依赖关系(refsIn/refsOut,引用图落盘;对应旗标 false 的老产物整段不渲染) ──
 var REFS_EMPTY = '未检出(名字级静态扫描,入口文件/动态调用检不到)';
+var REFS_OUT_EMPTY = '未检出(名字级静态扫描;只统计仓内块之间的引用)';
 function refTitle(n) { return n ? '被谁依赖(' + (n >= 10 ? '前 10' : n) + ')' : '被谁依赖'; }
-function refsHtml(id) { // 非空列表 → <ul>;来源是块的可点跳转(data-ref,避免撞面板既有 .nb[data-id] 绑定),证据名最多 3 个
-  var refs = state.chunks[id].refsIn;
+function refOutTitle(n) { return n ? '它依赖谁(' + (n >= 10 ? '前 10' : n) + ')' : '它依赖谁'; }
+function refItems(list, key) { // refsIn 传 'from' / refsOut 传 'to',统一成 {id, names}
+  var out = [];
+  for (var i = 0; i < list.length; i++) out.push({ id: list[i][key], names: list[i].names });
+  return out;
+}
+function refsHtml(items) { // 通用列表:{id, names}[];id 是块 → 可点跳转(data-ref,避免撞面板既有 .nb[data-id] 绑定),证据名最多 3 个
   var html = '<ul>';
-  for (var i = 0; i < refs.length; i++) {
-    var r = refs[i];
-    var base = r.from.split('/').pop();
-    var src = state.chunks[r.from]
-      ? '<span class="nb ref-jump" data-ref="' + esc(r.from) + '" title="' + esc(r.from) + '">' + esc(base) + '</span>'
-      : '<span class="muted" title="' + esc(r.from) + '">' + esc(base) + '</span>';
+  for (var i = 0; i < items.length; i++) {
+    var r = items[i];
+    var base = r.id.split('/').pop();
+    var src = state.chunks[r.id]
+      ? '<span class="nb ref-jump" data-ref="' + esc(r.id) + '" title="' + esc(r.id) + '">' + esc(base) + '</span>'
+      : '<span class="muted" title="' + esc(r.id) + '">' + esc(base) + '</span>';
     var evid = r.names.length
       ? ' <span class="muted">(' + esc(r.names.slice(0, 3).join(', ')) + (r.names.length > 3 ? '…' : '') + ')</span>'
       : '';
@@ -529,12 +539,27 @@ function renderDrawerRefs() {
   box.hidden = false;
   var n = state.chunks[drawerId].refsIn.length;
   var html = '<div class="refs-head" id="refs-head">' + (refsCollapsed ? '▸ ' : '▾ ') + refTitle(n) + '</div>';
-  if (!refsCollapsed) html += n ? refsHtml(drawerId) : '<div class="muted">' + REFS_EMPTY + '</div>';
+  if (!refsCollapsed) html += n ? refsHtml(refItems(state.chunks[drawerId].refsIn, 'from')) : '<div class="muted">' + REFS_EMPTY + '</div>';
   box.innerHTML = html;
   $('refs-head').addEventListener('click', function () {
     refsCollapsed = !refsCollapsed;
     localStorage.setItem('easyreview-refs-collapsed', refsCollapsed ? 'yes' : 'no');
     renderDrawerRefs();
+  });
+  bindRefJumps(box);
+}
+function renderDrawerRefsOut() {
+  var box = $('drawer-refs-out');
+  if (!state.hasRefsOut || !drawerId) { box.hidden = true; return; }
+  box.hidden = false;
+  var n = state.chunks[drawerId].refsOut.length;
+  var html = '<div class="refs-head" id="refs-out-head">' + (refsOutCollapsed ? '▸ ' : '▾ ') + refOutTitle(n) + '</div>';
+  if (!refsOutCollapsed) html += n ? refsHtml(refItems(state.chunks[drawerId].refsOut, 'to')) : '<div class="muted">' + REFS_OUT_EMPTY + '</div>';
+  box.innerHTML = html;
+  $('refs-out-head').addEventListener('click', function () {
+    refsOutCollapsed = !refsOutCollapsed;
+    localStorage.setItem('easyreview-refsout-collapsed', refsOutCollapsed ? 'yes' : 'no');
+    renderDrawerRefsOut();
   });
   bindRefJumps(box);
 }
@@ -588,8 +613,13 @@ function renderPanel() {
     '<li>谁会调用它、它又依赖谁?</li></ul>';
   if (state.hasRefs) {
     html += c.refsIn.length
-      ? '<p><b>' + refTitle(c.refsIn.length) + '</b></p>' + refsHtml(showId)
+      ? '<p><b>' + refTitle(c.refsIn.length) + '</b></p>' + refsHtml(refItems(c.refsIn, 'from'))
       : '<p class="muted"><b>被谁依赖:</b>' + REFS_EMPTY + '</p>';
+  }
+  if (state.hasRefsOut) {
+    html += c.refsOut.length
+      ? '<p><b>' + refOutTitle(c.refsOut.length) + '</b></p>' + refsHtml(refItems(c.refsOut, 'to'))
+      : '<p class="muted"><b>它依赖谁:</b>' + REFS_OUT_EMPTY + '</p>';
   }
   if (c.neighbors.length) {
     html += '<p><b>顺便看看</b>(防盲区觅食)</p><ul>' + c.neighbors.slice(0, 6).map(function (n) {

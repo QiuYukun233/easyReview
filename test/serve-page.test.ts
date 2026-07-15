@@ -53,4 +53,17 @@ describe('renderPage', () => {
     expect(html).toContain('被谁依赖');
     expect(html).toContain('未检出');
   });
+
+  it('refsOut: 抽屉第二折叠区与折叠持久化键都在', () => {
+    const html = renderPage();
+    expect(html).toContain('id="drawer-refs-out"');
+    expect(html).toContain('easyreview-refsout-collapsed');
+    expect(html).not.toContain('src=');             // 仍自包含
+  });
+
+  it('refsOut: 它依赖谁文案与出边空态都在', () => {
+    const html = renderPage();
+    expect(html).toContain('它依赖谁');
+    expect(html).toContain('只统计仓内块之间的引用');
+  });
 });
