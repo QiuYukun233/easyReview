@@ -18,7 +18,7 @@
 - 仓库：`E:\dev\easyReview`（本地）/ `https://github.com/QiuYukun233/easyReview`（main）。
 - 目标分析对象：`D:\dev\umwelt-bevy`（Rust/Bevy workspace，crate: `chem_field`、`grid_workshop`）；`E:\learning\agent-research\repos\chatwoot`（Ruby/Rails+Vue，学习地图限 `--include app`——738 块/167 章/4780 方法；克隆已 unshallow 到 6365 commits，风险信号有效）。
 - 栈：Node 20+ / TypeScript(ESM) / vitest / `web-tree-sitter`+`tree-sitter-wasms` / git / cargo。
-- **62 文件 / 287 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
+- **62 文件 / 300 个测试全绿**，纯 TDD 完成，各计划均经两阶段 subagent 评审 + 终审后合入 main（清单见"下一步"）。
 - `npm run typecheck`（`tsc --noEmit`）是类型的真实门——vitest 用 esbuild 抹类型、不做类型检查，改类型后务必跑它。
 
 ### 完整闭环（在真实 umwelt-bevy 上可跑）
@@ -83,10 +83,10 @@ npm run serve -- --out <chatwoot-out> --port 4872
 | `extract/carve-vue.ts` | Vue SFC <script> 区段切取（regex 定位、lineOffset 还原真实行号；已知边界:字符串/HTML注释里的 </script> 会切早，接受）|
 | `extract/leaves.ts` | 通用 tree-sitter 叶子提取（query 按语言编译一次、tree 每次释放）|
 | `extract/tree.ts` | 组装三层树（章=crate 或顶层目录/子目录，块=文件，叶=函数/方法；--include 前缀过滤）|
-| `grade/{churn,coupling,ownership,centrality}.ts` | 四个信号（0..1，归一化）。中心度 2026-07-14 起为 **v2 引用图加权入度**（`referenceGraphCentrality`）:名字池=叶子名∪身份名(chunk.name;.rb 加驼峰),df > max(⌈5%N⌉,20) 泛用名不建边(`genericDfCutoff`),每引用文件记 1、同名多定义均分;顺产 `refsIn`(每块入边 top-10,含命中名字)落盘 tree.json。尾缀 ?/! 名字因 \b 怪癖实际建不了边(评审实测,接近于零而非低估)|
+| `grade/{churn,coupling,ownership,centrality}.ts` | 四个信号（0..1，归一化）。中心度 2026-07-14 起为 **v2 引用图加权入度**（`referenceGraphCentrality`）:名字池=叶子名∪身份名(chunk.name;.rb 加驼峰),df > max(⌈5%N⌉,20) 泛用名不建边(`genericDfCutoff`),每引用文件记 1、同名多定义均分;顺产 `refsIn`+`refsOut`(每块入/出边 top-10,含命中名字;出边仅 from∈块,同一边表转置)落盘 tree.json。尾缀 ?/! 名字因 \b 怪癖实际建不了边(评审实测,接近于零而非低估)|
 | `grade/grade.ts` | 复合两轴 + 分位分桶（min→0/max→1 位置百分位）|
 | `render/map-md.ts` | 风险×贡献度地图（可选 understood 点亮 ✓）|
-| `path/sequence.ts` | 学习路径排序（难度=0.5贡献+0.3风险+0.2size；章内连续；觅食邻居）|
+| `path/sequence.ts` | 学习路径排序（难度=0.5贡献+0.3风险+0.2size；章内连续）;邻居三段拼接(refsOut 真实依赖→refsIn 被依赖滤非块→章内,去重;老产物退化纯章内)|
 | `progress/progress.ts` | 进度持久化（understood + verified）|
 | `render/journey-md.ts` | 进度条 + 下一步卡片（可选叠加 LLM 职责/whyNow，无标签回退静态）|
 | `label/cache.ts` | 标签缓存：内容 hash（含函数源码+风险/贡献度档+邻居）、增量筛选、合并、读写 |
@@ -114,9 +114,9 @@ npm run serve -- --out <chatwoot-out> --port 4872
 | `interpret/prompt.ts` | 解读铁律 prompt + InterpretSchema |
 | `interpret/deepseek.ts` | DeepSeek 单块解读客户端(无 key → null;函数名单代码侧过滤)|
 | `interpret/cache.ts` | easyreview.interpret.json 读写 |
-| `serve/state.ts` | buildViewerState 纯函数（网格分桶/卡片数据/path 顺序/nextId/refsIn 去 weight+hasRefs 旗标,复用 buildPath+whyNow）|
+| `serve/state.ts` | buildViewerState 纯函数（网格分桶/卡片数据/path 顺序/nextId/refsIn+refsOut 去 weight+双旗标,复用 buildPath+whyNow）|
 | `serve/done.ts` | 页面"标记已理解"（校验块存在,复用 progress 模块——与 CLI done 同一代码路径）|
-| `serve/page.ts` | 自包含单页:Tab 双视图(网格|文件树)+ 源码抽屉 + 折叠 + AI 解读面板与「✨ 解读」开关 + 「被谁依赖」双落点(面板段落+抽屉折叠区,来源可点跳转)|
+| `serve/page.ts` | 自包含单页:Tab 双视图(网格|文件树)+ 源码抽屉 + 折叠 + AI 解读面板与「✨ 解读」开关 + 「被谁依赖」「它依赖谁」双向双落点(面板段落+抽屉两折叠区,refsHtml 泛化共用,来源可点跳转)|
 | `serve/highlight.ts` | 行级轻量高亮(四类 token,先转义再包 span,超长行降级)|
 | `serve/source.ts` | readSource:chunk 白名单校验→实时读盘→高亮,`{status,body}` 形状同 done|
 | `serve/interpret.ts` | /api/interpret 结果函数(白名单+增量缓存+在途去重)|
@@ -140,6 +140,7 @@ npm run serve -- --out <chatwoot-out> --port 4872
 10. ~~**中心度泛用名截断**~~ ✅ 已完成（分支 feat/centrality-generic-cutoff，见 `docs/superpowers/plans/2026-07-14-centrality-generic-cutoff.md`）。「贡献度排序」被定位为本产品最重要机能之一,此项目止血最毒的噪音源:叶子名 df(出现过的文件数,含定义文件)> `max(⌈5%×N⌉, 20)` → 视为词汇噪音贡献归零(`genericDfCutoff` 导出;5% 实测天然吸收语言关键字停用表,20 文件下限保护小仓库;非词名同一趟正则回退里统计 df,顺带修掉同名多定义文件的重复全库扫)。真仓验收通过(2026-07-14,chatwoot:确定性 map **7.3 秒**(比上轮 13.2s 还快);纯中心度哨兵与设计探针逐个吻合——`import` action 撞名霸榜的 contacts/actions.js **#2→#338**、tiktok/message_service #1→#147、叶子名 `end` 受害者 Pagination.vue #15→#308、真核心 conversations_controller 保持 #7,新榜首 ReplyBox/FullEditor/编辑器链路;umwelt 回归:grid.rs 仍中心度 #1、保留名归一化值与探针逐位一致;两真仓零接触)。**验收如实记录两点**:①「df 含自己」与探针「排除自己」口径差 1 在 umwelt 边界显形——`place_neuron`(20 个其它文件+自己=21)被截,ops.rs 中心度 #4→#15,系 spec 明确接受的口径代价;②带 key 重跑 map 总耗时 611s 全在 DeepSeek 重打标签(归一化全变→分位桶大挪移→约千余块换桶重打),确定性部分仍秒级;interpret 缓存全量失效属预期(键含 centrality 原始值,按需重生成)。**尾缀 ?/! 名字的 `\b` 怪癖**(`valid? &&` 匹配不上 `\bvalid\?\b`)在评审中曝光并记入 spec「不做什么」:这类名字扇入一直被系统性低估,新旧一致,留给 v2。
 11. ~~**中心度 v2:引用图 + 加权入度**~~ ✅ 已完成(分支 feat/centrality-refgraph,见 `docs/superpowers/plans/2026-07-14-centrality-refgraph.md`)。名字扇入退役,换引用图:名字池 = 叶子名∪**身份名**(chunk.name;.rb 加驼峰——`import ApiClient`/`include UrlHelper` 这类最强依赖信号 v1 完全看不见),df 截断复用,**每引用文件记 1**(fin,防单文件刷分),同名多定义均分;每块入边 top-10 连同命中名字以 `refsIn` 落盘 tree.json(可选字段,旧产物与全部夹具零改动;「被谁依赖」UI 另立项,数据已备好)。**PageRank 双仓实测差于加权入度**(簇内自引环流霸榜)——数据留档 spec 防重蹈。真仓验收通过(2026-07-15,chatwoot:确定性 map 7.3s;中心度哨兵与设计探针逐个吻合——conversation.rb **#1**(核心模型首次登顶)、URLHelper #337→**#12**、ApiClient ~#300→**#34**、controller #32、actions.js #77;refsIn 物证:URLHelper 十条入边逐条对应真实 `import { frontendURL, … } from 'dashboard/helper/URLHelper'`;**突变探针物证**:注释 conversation.rb:55 `include Labelable` → 两个 shared concern spec 真变红(rspec 把失败归因到 shared_examples 定义文件——预测者栽在文件归因上,但「地图榜首牵一发动全身」的实证成立);umwelt 回归 top-3 = path_tree/routes/grid;两真仓零接触、沙箱字节还原)。**诚实局限**(spec 记档):`message.rb` 型身份名撞大众词仍被低估(#184);尾缀 ?/! 名字实践中基本建不了边(评审实测,非「低估」是「接近零」);controllers 靠约定路由无名字引用,天花板 #32。**实现事故与教训**:实现 subagent 写文件把 `\b`/`\u0000` 转义写成原始控制字节(0x08/0x00),非词名回退路径整个死掉且测试删旧未补新、全绿糊过——spec 评审字节级核对抓获;修复用确定性脚本从计划 md 重生成源文件,并补非词名回归测试。62 文件 / 282 测试。
 12. ~~**「被谁依赖」UI 面板**~~ ✅ 已完成(分支 feat/refsin-viewer,见 `docs/superpowers/plans/2026-07-15-refsin-viewer.md`)。中心度 v2 落盘的 refsIn 呈现到 viewer:serve 层 `ViewerChunk.refsIn`(**weight 不进 payload**——内部量纲对读者无意义,落盘序即展示序)+ `ViewerState.hasRefs` 旗标(区分「老产物没数据」与「此块未检出入边」);前端双落点——面板卡片段落(在「顺便看看」之前)+ 抽屉可折叠区(默认折叠,localStorage 持久化),来源是块 → 可点跳转(data-ref 防撞既有 .nb[data-id] 绑定造成双触发),非块 → muted 纯文本;空态诚实标注「未检出(名字级静态扫描,入口文件/动态调用检不到)」,N=10 时标「前 10」不谎报总数。真仓验收通过(2026-07-15,HTTP 层:chatwoot `/api/state` 的 URLHelper 十条入边与 tree.json 逐条一致(from/names/顺序)、全量 2425 块零 weight 泄漏;老产物回归:删 refsIn 的 tree.json → hasRefs=false、全块空数组、页面不渲染该段;浏览器可视走查按惯例留给用户自点,4872 端口 serve 已起)。**用户已定下一项:refsOut「它依赖谁」**(要动 map 落盘出边)。**又一起控制字节事故(本次在文档)**:验收期发现 HANDOFF.md 第 11 条里记录上次事故的那句话本身含真实 NUL(0x00)——写「`\u0000`」时又被转义链吃掉;我第一次修复用 bash 内联 node 又插回了 NUL(JSON→bash→node 三层转义),最终用脚本文件 + `String.fromCharCode(92)` 拼字符修净。**教训升级:凡是要落盘的反斜杠转义文本,一律走 Write 工具写脚本文件、用 fromCharCode 构造,绝不过 shell 内联字符串**。62 文件 / 287 测试。
+13. ~~**refsOut「它依赖谁」**~~ ✅ 已完成(分支 feat/refsout,见 `docs/superpowers/plans/2026-07-15-refsout.md`)。引用图出边落盘 + UI 镜像 + **推荐位同源增强**(用户选定):centrality.ts 同一边表按 from 二次分组(仅 from∈块,top-10,权重降/平权 to 字典序);sequence.ts 邻居三段拼接(refsOut 真实依赖→refsIn 被依赖滤非块→章内,去重)——journey.md 与 viewer 同一口径,学习路径**顺序不动**;serve 层 refsOut 去 weight+hasRefsOut 独立旗标(三态产物:旧/仅 refsIn 中间期/双全);page.ts refsHtml 泛化接 {id,names}[]、第二折叠区 `#drawer-refs-out`+面板「它依赖谁」段。真仓验收通过(2026-07-15,chatwoot:**labels.json/interpret.json 字节不变**(缓存零失效实证,重跑 map 零 LLM 调用)、双跑 tree.json 字节一致、refsOut 2323 键;物证:conversation.rb 出边前三正是它 include 的 SortHandler/ActivityMessageHandler/LabelActivityMessageHandler 三 concerns(权重 4/2/2 登顶)、反向抽查 5/5 在对方入边中;HTTP 层逐条一致、viewer neighbors 前置段与 refsOut 保序、journey.md 新文案落地;中间期产物回归 hasRefsOut=false 全程安全;umwelt top-3 = path_tree/routes/grid 保序、refsOut 60 键)。**诚实局限**:出边列表尾部低权重条目撞词噪音比例明显高于入边(文件自身词汇 ∩ 他人定义名的偶然交集,权重 1 级别;URLHelper.js 这类无仓内依赖的纯工具文件全列表皆噪音)——权重排序把真实依赖顶前排是设计行为,根治留给语义增强候选。评审链战果:spec 评审抓到 journey-md「同章相邻」文案失实(邻居已可跨章)顺手修正;质量评审三处 Minor 落地(C 块断言对齐、allChunkIds 改名+to 恒为块注释、折叠键连字符惯例)。62 文件 / 300 测试。
 
 ## 一些工作方式上值得记住的经验
 
