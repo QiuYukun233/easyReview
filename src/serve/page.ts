@@ -32,6 +32,7 @@ export function renderPage(): string {
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* 作者 display(#drawer flex/#grid grid)会压过 UA 的 [hidden],必须守卫 */
 body { margin: 0; font: 14px/1.6 system-ui, sans-serif; background: var(--bg); color: var(--text); }
 header { display: flex; align-items: center; gap: 16px; padding: 10px 20px; border-bottom: 1px solid var(--border); }
 header h1 { font-size: 16px; margin: 0; }
