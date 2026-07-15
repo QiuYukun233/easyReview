@@ -59,7 +59,7 @@ export function renderJourneyMarkdown(g: GradedTree, path: JourneyPath, progress
   lines.push('');
   if (next.neighbors.length) {
     lines.push('### 顺便看看（防盲区觅食）');
-    lines.push('同章相邻，别只盯着这一条路径：');
+    lines.push('真实依赖与同章相邻，别只盯着这一条路径：');
     for (const n of next.neighbors.slice(0, 6)) {
       const nc = g.chunks.find((c) => c.id === n);
       if (nc) lines.push(`- \`${nc.name}\` (\`${n}\`)${understood.has(n) ? ' ✓' : ''}`);
