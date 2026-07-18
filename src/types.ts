@@ -203,3 +203,11 @@ export interface Flow {
   rawTrace: { file: string; method: string; line: number }[]; // 方法级原始序列,将来下钻用;不出前端
 }
 export interface FlowsFile { version: 1; flows: Flow[] }
+
+/** 流程自动发现的候选(spec:2026-07-19-flow-discover-design.md)。独立落盘 easyreview.flow-candidates.json,不进 flows.json。 */
+export interface FlowCandidate {
+  id: string;    // flowIdFor(spec 文件, 行号)——与已追踪流程同 id 才能去重
+  name: string;  // rspec full_description(describe+context+it 拼接)
+  spec: string;  // "spec/xxx_spec.rb:行号",可直接喂 flow trace
+}
+export interface FlowCandidatesFile { version: 1; candidates: FlowCandidate[] }

@@ -60,6 +60,10 @@ main { display: flex; gap: 16px; padding: 16px 20px; align-items: flex-start; }
 .dot.selected { outline: 2px solid var(--accent); }
 #legend { margin-top: 10px; color: var(--muted); font-size: 12px; }
 #flows { max-width: 720px; }
+    .cand-group-head { cursor: pointer; padding: 4px 0; opacity: 0.7; user-select: none; }
+    .cand-item { margin: 4px 0 8px 12px; }
+    .cand-name { font-size: 13px; }
+    .cand-cmd { display: block; margin-top: 2px; font-size: 12px; opacity: 0.85; word-break: break-all; }
 .flow-card { border: 1px solid var(--border); border-radius: 10px; background: var(--panel-bg); padding: 12px 16px; margin-bottom: 12px; }
 .flow-card h3 { margin: 0 0 6px; font-size: 14px; }
 .flow-step { display: flex; gap: 8px; padding: 3px 0; align-items: baseline; }
@@ -166,6 +170,8 @@ var interpCollapsed = localStorage.getItem('easyreview-interpret-collapsed') ===
 var refsCollapsed = localStorage.getItem('easyreview-refs-collapsed') !== 'no'; // 默认折叠(不挤源码空间)
 var refsOutCollapsed = localStorage.getItem('easyreview-refs-out-collapsed') !== 'no'; // 默认折叠
 var flowSetupCollapsed = localStorage.getItem('easyreview-flow-setup-collapsed') !== 'no'; // 默认折叠
+var candCollapsed = {};
+try { candCollapsed = JSON.parse(localStorage.getItem('easyreview-cand-collapsed') || '{}') || {}; } catch (e) { candCollapsed = {}; }
 var interp = {}; // chunkId → { st: 'loading'|'ok'|'nokey'|'err', data?, msg? }(本页生命周期缓存)
 
 var RISK_CN = { high: '高', med: '中', low: '低', none: '无' };
@@ -232,11 +238,11 @@ function render() {
 }
 
 function renderTabs() {
-  if (view === 'flows' && !state.hasFlows) { view = 'grid'; localStorage.setItem('easyreview-view', view); } // 回退必须先于 className 读 view
+  if (view === 'flows' && !state.hasFlows && !state.hasCandidates) { view = 'grid'; localStorage.setItem('easyreview-view', view); } // 回退必须先于 className 读 view
   $('tab-grid').className = view === 'grid' ? 'active' : '';
   $('tab-tree').className = view === 'tree' ? 'active' : '';
   $('tab-flows').className = view === 'flows' ? 'active' : '';
-  $('tab-flows').hidden = !state.hasFlows;
+  $('tab-flows').hidden = !state.hasFlows && !state.hasCandidates;
   $('grid').hidden = view !== 'grid';
   $('tree').hidden = view !== 'tree';
   $('flows').hidden = view !== 'flows';
@@ -365,7 +371,7 @@ function renderTree() {
   }
 }
 
-// ── 流程视图(纵向切片,easyreview.flows.json;hasFlows=false 时 Tab 不出现) ──
+// ── 流程视图(纵向切片,easyreview.flows.json;hasFlows=false 且 hasCandidates=false 时 Tab 不出现) ──
 function renderFlows() {
   var html = '';
   for (var i = 0; i < state.flows.length; i++) {
@@ -394,6 +400,37 @@ function renderFlows() {
     }
     html += '</div>';
   }
+  // ── 可追踪的流程候选(easyreview.flow-candidates.json;hasCandidates=false 不渲染) ──
+  if (state.hasCandidates) {
+    html += '<div class="flow-card"><h3>可追踪的流程(' + state.candidates.length + ' 条)</h3>';
+    if (!state.candidates.length) {
+      html += '<div class="muted">(没有未追踪的候选——要么还没跑 flow discover,要么发现到的都已追踪)</div>';
+    } else {
+      html += '<div class="muted">复制命令到终端一跑即得该流程(trace 较慢,懒加载):</div>';
+      var groups = {}; var order = [];
+      for (var ci = 0; ci < state.candidates.length; ci++) {
+        var cand = state.candidates[ci];
+        var gfile = cand.spec.split(':')[0];
+        if (!groups[gfile]) { groups[gfile] = []; order.push(gfile); }
+        groups[gfile].push(cand);
+      }
+      for (var gi = 0; gi < order.length; gi++) {
+        var gf = order[gi];
+        var collapsed = candCollapsed[gf] !== false; // 默认折叠(undefined → 折叠)
+        html += '<div class="cand-group-head" data-file="' + esc(gf) + '">' +
+          (collapsed ? '▸ ' : '▾ ') + esc(gf.split('/').pop()) + ' (' + groups[gf].length + ')</div>';
+        if (!collapsed) {
+          for (var xi = 0; xi < groups[gf].length; xi++) {
+            var cc = groups[gf][xi];
+            var ctext = 'flow trace ' + cc.spec + ' --name "' + cc.name.replace(/"/g, "'") + '"';
+            html += '<div class="cand-item"><div class="cand-name">' + esc(cc.name) + '</div>' +
+              '<code class="cand-cmd">' + esc(ctext) + '</code></div>';
+          }
+        }
+      }
+    }
+    html += '</div>';
+  }
   $('flows').innerHTML = html;
   var heads = $('flows').querySelectorAll('.flow-setup-head');
   for (var h = 0; h < heads.length; h++) {
@@ -409,6 +446,15 @@ function renderFlows() {
       selectedId = ev.currentTarget.getAttribute('data-ref');
       openDrawer(selectedId);
       render();
+    });
+  }
+  var chs = $('flows').querySelectorAll('.cand-group-head');
+  for (var g2 = 0; g2 < chs.length; g2++) {
+    chs[g2].addEventListener('click', function (ev) {
+      var f = ev.currentTarget.getAttribute('data-file');
+      candCollapsed[f] = candCollapsed[f] === false;
+      localStorage.setItem('easyreview-cand-collapsed', JSON.stringify(candCollapsed));
+      renderFlows();
     });
   }
 }

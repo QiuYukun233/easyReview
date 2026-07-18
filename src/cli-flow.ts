@@ -5,10 +5,12 @@ import { sandboxFor, syncSandbox } from './verify/sandbox.js';
 import { realExec, type Exec } from './verify/cargo.js';
 import { TRACER_RB, foldTrace, type RawCall } from './flow/trace.js';
 import { loadFlows, saveFlows, upsertFlow } from './flow/flows.js';
+import { flowIdFor } from './flow/flow-id.js';
 import { withMutation, chooseMutation } from './verify/mutate.js';
 import { parseRspecJson } from './verify/rspec-parse.js';
 import { pickSiteInMethods, type ProbeSite } from './flow/probe-site.js';
 import { judgeProbe, renderProbeMd, type ProbePrediction } from './flow/probe.js';
+import { parseDryRun, saveCandidates, emptyDryRunReason } from './flow/candidates.js';
 import type { MutationOp } from './types.js';
 
 const TRACER_NAME = 'easyreview_tracer.rb';
@@ -67,7 +69,7 @@ export async function runFlowTrace(o: FlowTraceOpts): Promise<void> {
     if (!steps.length) throw new Error('trace 没有触达 app/ 代码——换一条 request/controller spec');
     if (raw.truncated) console.error('⚠ trace 达上限被截断——首现序步链仍可用,hits 偏低');
     const flow = {
-      id: 'flow-' + ref.file.split('/').pop()!.replace('_spec.rb', '') + (ref.line ? '-L' + ref.line : ''),
+      id: flowIdFor(ref.file, ref.line),
       name: o.name,
       source: { kind: 'rspec-trace' as const, spec: specArg, tracedAt: new Date().toISOString() },
       steps,
@@ -153,4 +155,35 @@ export async function runFlowProbe(o: FlowProbeOpts): Promise<void> {
   console.log(verdict.hit
     ? '✓ 预测命中——报告已写入 easyreview.flowprobe.md'
     : '✗ 预测未命中——报告已写入 easyreview.flowprobe.md');
+}
+
+export interface FlowDiscoverOpts {
+  repo: string; outDir: string; specDirs?: string[]; exec?: Exec;
+}
+
+const DEFAULT_SPEC_DIRS = ['spec/requests', 'spec/system', 'spec/controllers'];
+
+/** 流程自动发现:dry-run 业务流程 spec、枚举 example、落盘候选(spec:2026-07-19-flow-discover-design.md)。
+ *  不走沙箱——dry-run 纯只读、往仓里写零文件,cwd=repo 直跑(runner 本就 docker 隔离)。不碰 flows.json。 */
+export async function runFlowDiscover(o: FlowDiscoverOpts): Promise<void> {
+  const config = loadRubyRunnerConfig(o.repo);
+  if (!config.cmd.includes('{specFiles}')) {
+    throw new Error('runner.json 的 ruby.cmd 缺 {specFiles} 占位符——discover 靠它注入 --dry-run 与目录;缺了会退化成对真实仓跑全量非 dry-run 测试(配方:docs/recipes/chatwoot-rspec.md)');
+  }
+  const attempted = o.specDirs ?? DEFAULT_SPEC_DIRS;
+  const dirs = attempted.filter((d) => existsSync(join(o.repo, d)));
+  if (!dirs.length) {
+    throw new Error('没有可发现的 spec 目录(找过:' + attempted.join(', ') + ')——用 --specs 指定存在的目录,或确认仓库结构');
+  }
+  console.error('⏳ dry-run 枚举 ' + dirs.join(', ') + '(docker 冷启动可能较慢)…');
+  const [cmd, ...args] = expandCmd(config.cmd, ['--dry-run', ...dirs]);
+  const out = await (o.exec ?? realExec)(cmd, args, o.repo);
+  const candidates = parseDryRun(out);
+  if (!candidates.length) {
+    console.error(emptyDryRunReason(out) === 'load-error'
+      ? '⚠ dry-run 加载期报错(0 example)——大概率环境没起好:如 test 库 schema 未加载(chatwoot pg 在 tmpfs,重启后需 rails db:schema:load);见配方 docs/recipes/chatwoot-rspec.md'
+      : '⚠ dry-run 没枚举到任何 example——确认 spec 目录非空、runner 能加载 rails_helper(配方:docs/recipes/chatwoot-rspec.md)');
+  }
+  saveCandidates(o.outDir, { version: 1, candidates });
+  console.log('✓ 发现 ' + candidates.length + ' 条可追踪流程 → easyreview.flow-candidates.json');
 }

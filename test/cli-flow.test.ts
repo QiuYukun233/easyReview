@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runFlowTrace, runFlowProbe } from '../src/cli-flow.js';
+import { runFlowTrace, runFlowProbe, runFlowDiscover } from '../src/cli-flow.js';
 import { sandboxFor } from '../src/verify/sandbox.js';
 import type { Exec } from '../src/verify/cargo.js';
 
@@ -285,5 +285,64 @@ describe('runFlowProbe(编排:校验→沙箱→斩→单例跑→判定→报�
     const md = readFileSync(join(out, 'easyreview.flowprobe.md'), 'utf8');
     expect(md).toContain('⚠ 回退');                    // file-fallback 标注
     expect(mutatedSeen).toContain('# loner_call(9)');  // chooseMutation 语言感知前缀(Ruby 用 #),证明走了回退且复用 op.mutated
+  });
+});
+
+describe('runFlowDiscover(dry-run 枚举 → 候选落盘)', () => {
+  const dryRunOut = (specDir: string) => JSON.stringify({ examples: [
+    { full_description: 'creates a message', file_path: './' + specDir + '/messages_controller_spec.rb', line_number: 25 },
+  ] });
+
+  it('成功:候选文件落盘,cwd=repo(不建沙箱)', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, 'spec', 'controllers'), { recursive: true });
+    const out = mkdtempSync(join(tmpdir(), 'er-out-'));
+    let seenCwd = '';
+    const exec: Exec = async (_c, args, cwd) => {
+      seenCwd = cwd;
+      expect(args).toContain('--dry-run');
+      expect(args).toContain('spec/controllers');
+      return dryRunOut('spec/controllers');
+    };
+    await runFlowDiscover({ repo, outDir: out, specDirs: ['spec/controllers'], exec });
+    expect(seenCwd).toBe(repo); // 不是沙箱
+    const file = JSON.parse(readFileSync(join(out, 'easyreview.flow-candidates.json'), 'utf8'));
+    expect(file.candidates).toHaveLength(1);
+    expect(file.candidates[0].id).toBe('flow-controllers-messages_controller-L25');
+  });
+
+  it('指定目录都不存在 → 友好拒绝', async () => {
+    const repo = makeRepo();
+    await expect(runFlowDiscover({ repo, outDir: repo, specDirs: ['spec/nope'], exec: async () => '' }))
+      .rejects.toThrow('没有可发现的 spec 目录');
+  });
+
+  it('dry-run 零 example → 落空候选文件(不抛)', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, 'spec', 'requests'), { recursive: true });
+    const out = mkdtempSync(join(tmpdir(), 'er-out-'));
+    await runFlowDiscover({ repo, outDir: out, specDirs: ['spec/requests'],
+      exec: async () => JSON.stringify({ examples: [] }) });
+    const file = JSON.parse(readFileSync(join(out, 'easyreview.flow-candidates.json'), 'utf8'));
+    expect(file.candidates).toEqual([]);
+  });
+
+  it('--specs 混合存在/不存在:只跑存在的目录', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, 'spec', 'controllers'), { recursive: true });
+    const out = mkdtempSync(join(tmpdir(), 'er-out-'));
+    let seenArgs: string[] = [];
+    const exec: Exec = async (_c, args) => { seenArgs = args; return dryRunOut('spec/controllers'); };
+    await runFlowDiscover({ repo, outDir: out, specDirs: ['spec/controllers', 'spec/nope'], exec });
+    expect(seenArgs).toContain('spec/controllers');
+    expect(seenArgs).not.toContain('spec/nope');
+  });
+
+  it('runner.cmd 缺 {specFiles} → fail-closed(不退化成真实仓全量跑)', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'er-flow-'));
+    writeFileSync(join(repo, 'easyreview.runner.json'), JSON.stringify({ version: 1, ruby: { cmd: ['fake-rspec'] } }));
+    mkdirSync(join(repo, 'spec', 'controllers'), { recursive: true });
+    await expect(runFlowDiscover({ repo, outDir: repo, specDirs: ['spec/controllers'], exec: async () => '' }))
+      .rejects.toThrow('{specFiles}');
   });
 });

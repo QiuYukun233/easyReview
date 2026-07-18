@@ -160,8 +160,17 @@ if (cmd === 'flow') {
       runFlowProbe({ repo, outDir, flowId: positional, step, predict })
         .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
     );
+  } else if (sub === 'discover') {
+    const si2 = rest.indexOf('--specs');
+    const specDirs = si2 >= 0 && rest[si2 + 1]
+      ? rest[si2 + 1].split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+    const { repo, outDir } = parseArgs(rest);
+    import('./cli-flow.js').then(({ runFlowDiscover }) =>
+      runFlowDiscover({ repo, outDir, specDirs })
+        .catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); }),
+    );
   } else {
-    console.error('用法: easyreview flow trace <specFile[:行号]> --name "<名>" | flow probe <flowId> --step <N> --predict red|green');
+    console.error('用法: easyreview flow trace <specFile[:行号]> --name "<名>" | flow probe <flowId> --step <N> --predict red|green | flow discover [--specs dir,dir] [--repo <p>] [--out <d>]');
     process.exit(1);
   }
 }

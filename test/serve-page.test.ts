@@ -102,3 +102,23 @@ describe('renderPage', () => {
     expect(html).toContain('request=请求叙事');
   });
 });
+
+describe('候选段(flow discover)静态渲染契约', () => {
+  it('页面含候选段渲染分支与命令文案骨架', () => {
+    const html = renderPage();
+    expect(html).toContain('可追踪的流程');
+    expect(html).toContain('state.hasCandidates');
+    expect(html).toContain('flow trace ');
+    expect(html).toContain('cand-group-head');
+  });
+
+  it('Tab 可达同时看 hasFlows 与 hasCandidates(有候选无流程也出 Tab)', () => {
+    const html = renderPage();
+    expect(html).toContain('!state.hasFlows && !state.hasCandidates');
+  });
+
+  it('拷贝命令对名字里的双引号做消毒(不产出破损 --name)', () => {
+    const html = renderPage();
+    expect(html).toContain("cc.name.replace(/\"/g, \"'\")");
+  });
+});

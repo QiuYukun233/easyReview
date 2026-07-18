@@ -9,4 +9,8 @@ easyreview.progress.json
 easyreview.verify.md
 easyreview.verify-baseline.json
 easyreview.labels.json
+easyreview.interpret.json
+easyreview.flows.json
+easyreview.flow-candidates.json
+easyreview.flowprobe.md
 .superpowers/

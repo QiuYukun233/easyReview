@@ -1,4 +1,4 @@
-import type { GradedTree, LabelCache, Progress, NodeId, RiskBucket, ContribBucket, FlowsFile, FlowStep } from '../types.js';
+import type { GradedTree, LabelCache, Progress, NodeId, RiskBucket, ContribBucket, FlowsFile, FlowStep, FlowCandidatesFile } from '../types.js';
 import { buildPath } from '../path/sequence.js';
 import { whyNow } from '../render/journey-md.js';
 
@@ -25,12 +25,14 @@ export interface ViewerState {
   hasRefsOut: boolean; // tree.refsOut 是否存在;仅 refsIn 的中间期产物此旗标 false
   flows: { id: string; name: string; spec: string; steps: FlowStep[] }[]; // rawTrace 不出前端
   hasFlows: boolean; // 有至少一条流程才渲染 Tab
+  candidates: { id: string; name: string; spec: string }[]; // 未追踪的可追踪候选(已追踪的滤掉)
+  hasCandidates: boolean; // 跑过 flow discover(候选文件存在)才渲染候选段;区别于"跑了但零候选"
 }
 
 const RISK_ROWS: RiskBucket[] = ['high', 'med', 'low', 'none'];
 const CONTRIB_COLS: ContribBucket[] = ['filler', 'low', 'med', 'high'];
 
-export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Progress, flowsFile?: FlowsFile | null): ViewerState {
+export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Progress, flowsFile?: FlowsFile | null, candidatesFile?: FlowCandidatesFile | null): ViewerState {
   const path = buildPath(g);
   const understood = new Set(progress.understood);
   const verified = new Set(progress.verified ?? []);
@@ -66,6 +68,8 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
 
   const pathIds = path.steps.map((s) => s.chunkId);
   const flowList = flowsFile?.flows ?? [];
+  const tracedIds = new Set(flowList.map((f) => f.id));
+  const candidates = (candidatesFile?.candidates ?? []).filter((c) => !tracedIds.has(c.id));
   return {
     generatedAt: new Date().toISOString(),
     progress: {
@@ -81,5 +85,7 @@ export function buildViewerState(g: GradedTree, labels: LabelCache, progress: Pr
     hasRefsOut: g.refsOut !== undefined,
     flows: flowList.map((f) => ({ id: f.id, name: f.name, spec: f.source.spec, steps: f.steps })),
     hasFlows: flowList.length > 0,
+    candidates: candidates.map((c) => ({ id: c.id, name: c.name, spec: c.spec })),
+    hasCandidates: candidatesFile != null,
   };
 }

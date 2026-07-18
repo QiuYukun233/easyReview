@@ -142,3 +142,32 @@ describe('buildViewerState flows(纵向切割,spec §7)', () => {
     expect(s.flows[0].steps[0].phase).toBe('request');
   });
 });
+
+describe('buildViewerState 候选(flow discover)', () => {
+  const P = { version: 1 as const, understood: [] };
+  const candFile = { version: 1 as const, candidates: [
+    { id: 'flow-a-L1', name: 'A 流程', spec: 'spec/a_spec.rb:1' },
+    { id: 'flow-b-L2', name: 'B 流程', spec: 'spec/b_spec.rb:2' },
+  ] };
+
+  it('无候选文件 → hasCandidates=false、candidates 空', () => {
+    const s = buildViewerState(makeViewerTree(), makeViewerLabels(), P, null, null);
+    expect(s.hasCandidates).toBe(false);
+    expect(s.candidates).toEqual([]);
+  });
+
+  it('有候选文件 → hasCandidates=true、候选透出', () => {
+    const s = buildViewerState(makeViewerTree(), makeViewerLabels(), P, null, candFile);
+    expect(s.hasCandidates).toBe(true);
+    expect(s.candidates.map((c) => c.id)).toEqual(['flow-a-L1', 'flow-b-L2']);
+  });
+
+  it('已追踪(同 id)的候选被滤掉', () => {
+    const flowsFile = { version: 1 as const, flows: [
+      { id: 'flow-a-L1', name: 'A', source: { kind: 'rspec-trace' as const, spec: 'spec/a_spec.rb:1', tracedAt: 't' }, steps: [], rawTrace: [] },
+    ] };
+    const s = buildViewerState(makeViewerTree(), makeViewerLabels(), P, flowsFile, candFile);
+    expect(s.candidates.map((c) => c.id)).toEqual(['flow-b-L2']); // a 已追踪,只剩 b
+    expect(s.hasCandidates).toBe(true); // 跑过 discover 就是 true(即使全被滤空也保持)
+  });
+});
